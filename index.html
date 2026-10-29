@@ -126,6 +126,7 @@ tailwind.config = {
           <button type="button" onclick="showAuth('recovery')" class="hover:underline">Forgot password?</button>
           <button type="button" onclick="showAuth('signup')" class="text-brand-500 font-bold hover:underline">Create account</button>
         </div>
+        <button type="button" id="resend-verification-btn" onclick="resendVerificationEmail()" class="w-full text-xs font-bold text-brand-500 hover:underline pt-1">Resend email verification</button>
       </form>
 
       <!-- Signup -->
@@ -1111,6 +1112,7 @@ $('form-signup').addEventListener('submit', async e => {
       toast('Account created successfully.', 'success');
       enterApp();
     } else {
+      try { localStorage.setItem('sft_pending_verification_email', email); } catch (_) {}
       toast('Account created. Check your email to confirm it, then sign in.', 'success');
       showAuth('login');
     }
@@ -1120,6 +1122,31 @@ $('form-signup').addEventListener('submit', async e => {
     if (button) { button.disabled = false; button.textContent = 'Create Account'; }
   }
 });
+async function resendVerificationEmail() {
+  let email = '';
+  try { email = (localStorage.getItem('sft_pending_verification_email') || '').trim().toLowerCase(); } catch (_) {}
+  if (!email) {
+    const signupEmail = $('su-email')?.value?.trim()?.toLowerCase();
+    if (signupEmail) email = signupEmail;
+  }
+  if (!email) {
+    toast('No pending verification email was saved on this device. Create your account here first, or enter your email in Create account.', 'error');
+    return;
+  }
+  const button = $('resend-verification-btn');
+  if (button) { button.disabled = true; button.textContent = 'Sending verification email…'; }
+  try {
+    const client = getSupabase();
+    const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) throw error;
+    toast('If this account still needs verification, a new confirmation email has been sent to ' + email + '.', 'success');
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Resend email verification'; }
+  }
+}
+
 $('form-recovery').addEventListener('submit', async e => {
   e.preventDefault();
   const email = $('rc-email').value.trim().toLowerCase();
@@ -2744,6 +2771,7 @@ async function init() {
       return;
     }
     if (emailWasVerified) {
+      try { localStorage.removeItem('sft_pending_verification_email'); } catch (_) {}
       // Keep the user on the login screen after confirmation rather than auto-entering the app.
       await client.auth.signOut();
       history.replaceState(null, '', location.pathname + location.search);
