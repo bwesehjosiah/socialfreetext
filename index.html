@@ -1033,7 +1033,7 @@ function authErrorMessage(error) {
 async function loadAuthenticatedProfile(authUser) {
   const client = getSupabase();
   let { data: profile, error } = await client.from('profiles')
-    .select('id, username, display_name, avatar_url, bio, created_at')
+    .select('id, username, display_name, avatar_url, cover_url, bio, created_at')
     .eq('id', authUser.id).maybeSingle();
   if (error) throw error;
   // The SQL trigger creates this profile. Retry briefly in case the trigger's row is not
@@ -1050,7 +1050,7 @@ async function loadAuthenticatedProfile(authUser) {
   const username = profile.username || email.split('@')[0] || 'user';
   const user = {
     id: authUser.id, name: profile.display_name || username, username, email,
-    bio: profile.bio || '', avatar: profile.avatar_url || IMG_POOL[0],
+    bio: profile.bio || '', avatar: profile.avatar_url || IMG_POOL[0], cover: profile.cover_url || '',
     role: 'User', status: 'active', verified: Boolean(authUser.email_confirmed_at),
     followers: 0, following: 0, recoveryEmail: '', blocked: [], twoFA: false,
     joinedAt: profile.created_at || authUser.created_at
@@ -2152,20 +2152,49 @@ function editProfile() {
   setTimeout(() => { $('ep-sheet').classList.remove('hidden'); $('ep-sheet').classList.add('flex'); }, 10);
   setTimeout(() => $('ep-av-url').addEventListener('input', e => $('ep-preview').src = e.target.value), 30);
 }
-function saveProfileEdit() {
+async function uploadProfileImage(file, kind) {
+  if (!file) return null;
+  if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Images must be 5 MB or smaller.');
+  const client = getSupabase(), userId = S.currentUserId;
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
+  const path = userId + '/' + kind + '-' + Date.now() + '.' + ext;
+  const {error} = await client.storage.from('profile-media').upload(path, file, {upsert:true, contentType:file.type, cacheControl:'3600'});
+  if (error) throw error;
+  const {data} = client.storage.from('profile-media').getPublicUrl(path);
+  return data.publicUrl;
+}
+async function loadFollowCounts() {
+  const client=getSupabase(), id=S.currentUserId;
+  if (!id) return;
+  const [followers,following]=await Promise.all([
+    client.from('follows').select('follower_id',{count:'exact',head:true}).eq('following_id',id),
+    client.from('follows').select('following_id',{count:'exact',head:true}).eq('follower_id',id)
+  ]);
+  if (followers.error) throw followers.error;
+  if (following.error) throw following.error;
+  const u=me(); u.followers=followers.count||0; u.following=following.count||0;
+  $('pr-followers').textContent=u.followers.toLocaleString();
+  $('pr-following').textContent=u.following.toLocaleString();
+}
+async function saveProfileEdit() {
   const u = me();
-  u.name = $('ep-name').value.trim() || u.name;
-  u.username = $('ep-user').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'') || u.username;
-  u.bio = $('ep-bio').value.trim();
-  u.avatar = $('ep-av-url').value.trim() || u.avatar;
-  saveState();
-  $('ep-sheet').remove();
-  $('hdr-avatar').src = u.avatar;
-  $('sb-avatar').src = u.avatar;
-  $('sb-name').textContent = u.name;
-  $('sb-handle').textContent = '@' + u.username;
-  renderProfile();
-  toast('Profile updated', 'success');
+  try {
+    const avatarFile=$('ep-avatar-file')?.files?.[0], coverFile=$('ep-cover-file')?.files?.[0];
+    if (avatarFile) u.avatar=await uploadProfileImage(avatarFile,'avatar');
+    else u.avatar=$('ep-av-url').value.trim() || u.avatar;
+    if (coverFile) u.cover=await uploadProfileImage(coverFile,'cover');
+    u.name = $('ep-name').value.trim() || u.name;
+    u.username = $('ep-user').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'') || u.username;
+    u.bio = $('ep-bio').value.trim();
+    const client=getSupabase();
+    const {error}=await client.from('profiles').update({display_name:u.name,username:u.username,avatar_url:u.avatar,cover_url:u.cover||null,bio:u.bio}).eq('id',S.currentUserId);
+    if(error) throw error;
+    saveState(); $('ep-sheet').remove();
+    $('hdr-avatar').src=u.avatar; $('sb-avatar').src=u.avatar;
+    $('sb-name').textContent=u.name; $('sb-handle').textContent='@'+u.username;
+    renderProfile(); toast('Profile updated', 'success');
+  } catch(error) { toast(authErrorMessage(error), 'error'); }
 }
 
 /* ══════════ SEARCH ══════════ */
