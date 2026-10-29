@@ -764,10 +764,11 @@ tailwind.config = {
     </div>
   </div>
   <div class="p-6 pb-10 flex items-center justify-center gap-4 safe-b">
+    <button id="call-answer" onclick="answerLiveCall()" class="hidden w-14 h-14 rounded-full bg-emerald-600 text-white items-center justify-center"><i class="fa-solid fa-phone"></i></button>
     <button id="call-mute" onclick="callToggle('mute')" class="w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center"><i class="fa-solid fa-microphone"></i></button>
     <button id="call-spk" onclick="callToggle('spk')" class="w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center"><i class="fa-solid fa-volume-high"></i></button>
     <button id="call-cam" onclick="callToggle('cam')" class="w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center hidden"><i class="fa-solid fa-video"></i></button>
-    <button onclick="endCall()" class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white text-xl flex items-center justify-center shadow-lg shadow-red-600/40"><i class="fa-solid fa-phone-slash"></i></button>
+    <button onclick="endLiveCall()" class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white text-xl flex items-center justify-center shadow-lg shadow-red-600/40"><i class="fa-solid fa-phone-slash"></i></button>
   </div>
 </div>
 
@@ -1394,6 +1395,7 @@ function go(view) {
 
 function initUI() {
   const u = me();
+  ensureE2EEKeys(S.currentUserId).catch(e=>console.warn('Encryption setup:',e.message)); subscribeLivePresence(); subscribeLiveMessages(); subscribeLiveCalls();
   $('hdr-avatar').src = u.avatar;
   $('sb-avatar').src = u.avatar;
   $('sb-name').textContent = u.name;
@@ -1460,17 +1462,17 @@ function openConv(id) {
   pane.classList.remove('hidden');
   pane.classList.add('flex');
   const t = chatTitle(c), av = chatAvatar(c);
-  const sub = c.type === 'group' ? (c.memberIds?.length||0)+' members' : 'Online';
+  const sub = c.type === 'group' ? (c.memberIds?.length||0)+' members' : (liveOnlineIds.has(c.userId)?'Online':'Offline');
   pane.innerHTML = `
     <div class="p-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center gap-3">
       <button onclick="closeConv()" class="md:hidden w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"><i class="fa-solid fa-arrow-left"></i></button>
       <img src="${esc(av)}" class="w-10 h-10 rounded-full object-cover">
       <div class="flex-1 min-w-0">
         <p class="font-bold text-sm truncate">${esc(t)}</p>
-        <p class="text-[11px] text-emerald-500 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> ${esc(sub)}</p>
+        <p class="text-[11px] flex items-center gap-1.5"><span class="live-status-dot w-1.5 h-1.5 rounded-full"></span><span class="live-status-text">${esc(sub)}</span></p>
       </div>
-      <button onclick="startCall('audio')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-phone"></i></button>
-      <button onclick="startCall('video')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-video"></i></button>
+      <button onclick="startLiveCall('audio')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-phone"></i></button>
+      <button onclick="startLiveCall('video')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-video"></i></button>
     </div>
     <div id="msgs" class="flex-1 overflow-y-auto sb p-3 space-y-2" style="background-image:radial-gradient(circle at 1px 1px, rgba(156,163,175,.08) 1px, transparent 0); background-size:16px 16px;"></div>
     <div class="p-2 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
@@ -1485,6 +1487,7 @@ function openConv(id) {
       </div>
     </div>`;
   renderMsgs();
+  if(c.type==='dm'){loadPersistedDM(id);}
 }
 function closeConv() {
   activeChat = null;
