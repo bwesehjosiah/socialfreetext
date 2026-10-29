@@ -87,8 +87,11 @@ revoke all on table public.profiles, public.messages, public.statuses from anon,
 grant select on table public.profiles to authenticated;
 grant insert (id, username, display_name, avatar_url, bio) on table public.profiles to authenticated;
 grant update (username, display_name, avatar_url, bio) on table public.profiles to authenticated;
-grant select, insert on table public.messages to authenticated;
-grant select, insert, update, delete on table public.statuses to authenticated;
+grant select on table public.messages to authenticated;
+grant insert (sender_id, recipient_id, body) on table public.messages to authenticated;
+grant select, delete on table public.statuses to authenticated;
+grant insert (user_id, content, media_url) on table public.statuses to authenticated;
+grant update (content, media_url) on table public.statuses to authenticated;
 
 drop policy if exists "Signed-in users can view profiles" on public.profiles;
 create policy "Signed-in users can view profiles" on public.profiles for select to authenticated
