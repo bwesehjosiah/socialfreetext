@@ -935,6 +935,11 @@ function loadState() {
 function saveState() {
   try { localStorage.setItem('sft_v3', JSON.stringify(S)); } catch {}
 }
+// Remove legacy prototype passwords from browser storage immediately. Authentication is handled
+// by Supabase Auth; local demo passwords must never be retained or accepted.
+if (Array.isArray(S.users)) S.users.forEach(user => { if (user && Object.prototype.hasOwnProperty.call(user, 'password')) delete user.password; });
+S.currentUserId = null;
+saveState();
 const me = () => S.users.find(u => u.id === S.currentUserId);
 const userById = id => S.users.find(u => u.id === id);
 const chatById = id => S.chats.find(c => c.id === id);
@@ -1021,6 +1026,8 @@ async function loadAuthenticatedProfile(authUser) {
   };
   // Keep the existing UI running, but do not persist passwords or tokens in S/localStorage.
   S.users = S.users.filter(item => item.id !== user.id);
+  // Do not retain prototype passwords for any local/demo user.
+  S.users.forEach(item => { if (Object.prototype.hasOwnProperty.call(item, 'password')) delete item.password; });
   S.users.push(user);
   S.currentUserId = user.id;
   return user;
@@ -2307,17 +2314,25 @@ function toggle2FA(btn) {
   toast(`2FA ${u.twoFA?'enabled 🔒':'disabled'}`, u.twoFA ? 'success' : 'info');
 }
 function openPasswordChange() { $('pw-modal').classList.remove('hidden'); $('pw-modal').classList.add('flex'); $('pw-old').value=''; $('pw-new').value=''; $('pw-new2').value=''; }
-function changePassword(e) {
+async function changePassword(e) {
   e.preventDefault();
   const u = me();
-  if ($('pw-old').value !== u.password) return toast('Current password is incorrect', 'error');
+  if (!u?.email) return toast('Please sign in again before changing your password.', 'error');
+  const oldPassword = $('pw-old').value;
   const n = $('pw-new').value;
-  if (n.length < 6) return toast('New password must be 6+ chars', 'error');
+  if (n.length < 8) return toast('Use a password of at least 8 characters.', 'error');
   if (n !== $('pw-new2').value) return toast('Passwords do not match', 'error');
-  u.password = n;
-  saveState();
-  $('pw-modal').classList.add('hidden'); $('pw-modal').classList.remove('flex');
-  toast('Password updated 🔐', 'success');
+  try {
+    const client = getSupabase();
+    const { error: verifyError } = await client.auth.signInWithPassword({ email: u.email, password: oldPassword });
+    if (verifyError) throw verifyError;
+    const { error } = await client.auth.updateUser({ password: n });
+    if (error) throw error;
+    $('pw-modal').classList.add('hidden'); $('pw-modal').classList.remove('flex');
+    toast('Password updated securely.', 'success');
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  }
 }
 function openRecovery() {
   const u = me();
