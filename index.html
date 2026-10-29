@@ -1192,6 +1192,110 @@ async function logout() {
 }
 function confirmLogout() { logout(); }
 
+/* ══════════ PEOPLE / CONNECTIONS ══════════ */
+let peopleTab = 'discover', peopleProfiles = [], peopleRequests = [], peopleChannel = null;
+function showPeopleTab(tab) {
+  peopleTab = tab;
+  ['discover','requests','connected'].forEach(name => {
+    const b = $('people-tab-'+name);
+    if (b) { b.className = 'px-4 py-2 rounded-xl text-xs font-bold ' + (name===tab ? 'bg-brand-600 text-white' : 'bg-gray-100 dark:bg-gray-800'); }
+  });
+  renderPeople();
+}
+async function loadPeople() {
+  const client = getSupabase(), meId = S.currentUserId;
+  if (!meId) return;
+  const [profilesResult, requestsResult] = await Promise.all([
+    client.from('profiles').select('id,username,display_name,avatar_url,bio,created_at').neq('id',meId).order('created_at',{ascending:false}).limit(200),
+    client.from('connection_requests').select('id,requester_id,recipient_id,status,created_at').or('requester_id.eq.'+meId+',recipient_id.eq.'+meId).order('created_at',{ascending:false}).limit(500)
+  ]);
+  if (profilesResult.error) throw profilesResult.error;
+  if (requestsResult.error) throw requestsResult.error;
+  peopleProfiles = profilesResult.data || [];
+  peopleRequests = requestsResult.data || [];
+  const map = new Map(peopleProfiles.map(p=>[p.id,p]));
+  peopleRequests.forEach(r => {
+    const p=map.get(r.requester_id===meId?r.recipient_id:r.requester_id);
+    if(p){ p.connectionStatus=r.status; p.requestId=r.id; p.requesterId=r.requester_id; }
+  });
+  const pending = peopleRequests.filter(r=>r.recipient_id===meId&&r.status==='pending').length;
+  $('people-request-count').textContent = pending ? '('+pending+')' : '';
+  $('people-request-badge').textContent = pending;
+  $('people-request-badge').classList.toggle('hidden',!pending);
+  renderPeople();
+}
+function renderPeople() {
+  const el=$('people-list'); if(!el)return;
+  const q=($('people-search')?.value||'').trim().toLowerCase(), meId=S.currentUserId;
+  const profiles=peopleProfiles.filter(p=>{
+    const request=peopleRequests.find(r=>(r.requester_id===meId&&r.recipient_id===p.id)||(r.recipient_id===meId&&r.requester_id===p.id));
+    p.connectionStatus=request?.status||'none'; p.requestId=request?.id; p.requesterId=request?.requester_id;
+    const matches=!q||(p.display_name||'').toLowerCase().includes(q)||(p.username||'').toLowerCase().includes(q);
+    if(!matches)return false;
+    if(peopleTab==='requests')return request?.status==='pending'&&(request.recipient_id===meId||request.requester_id===meId);
+    if(peopleTab==='connected')return request?.status==='accepted';
+    return !request;
+  });
+  if(!profiles.length){el.innerHTML='<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 text-center"><div class="text-3xl mb-3">👋</div><p class="font-bold text-sm">'+(peopleTab==='requests'?'No connection requests yet':peopleTab==='connected'?'No connections yet':'No people found')+'</p><p class="text-xs text-gray-500 mt-1">'+(peopleTab==='discover'?'New registered users will appear here.':'Your connections will appear here.')+'</p></div>';return;}
+  el.innerHTML=profiles.map(p=>{
+    const name=esc(p.display_name||p.username||'SocialfreeText user'), handle=esc(p.username||'user');
+    const avatar=esc(p.avatar_url||IMG_POOL[0]);
+    let action='';
+    if(peopleTab==='discover') action='<button onclick="sendConnectionRequest(\''+p.id+'\')" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold"><i class="fa-solid fa-link mr-1"></i>Connect</button>';
+    else if(peopleTab==='requests'&&p.connectionStatus==='pending'&&p.requesterId===p.id) action='<button onclick="respondConnection(\''+p.requestId+'\',true)" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold">Connect back</button><button onclick="respondConnection(\''+p.requestId+'\',false)" class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold">Decline</button>';
+    else if(peopleTab==='requests') action='<span class="text-xs text-amber-500 font-semibold">Request sent</span>';
+    else action='<button onclick="openConnectedChat(\''+p.id+'\')" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold"><i class="fa-solid fa-message mr-1"></i>Message</button>';
+    return '<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3 flex items-center gap-3"><img src="'+avatar+'" class="w-12 h-12 rounded-full object-cover bg-gray-100"><div class="min-w-0 flex-1"><p class="font-bold text-sm truncate">'+name+'</p><p class="text-xs text-brand-500 truncate">@'+handle+'</p><p class="text-xs text-gray-500 mt-1 truncate">'+esc(p.bio||'On SocialfreeText')+'</p></div><div class="flex gap-1 shrink-0">'+action+'</div></div>';
+  }).join('');
+}
+async function sendConnectionRequest(userId) {
+  try {
+    const client=getSupabase();
+    const {data:existing,error:lookupError}=await client.from('connection_requests').select('id,status').or('and(requester_id.eq.'+S.currentUserId+',recipient_id.eq.'+userId+'),and(requester_id.eq.'+userId+',recipient_id.eq.'+S.currentUserId+')').limit(1);
+    if(lookupError)throw lookupError;
+    if(existing?.some(r=>r.status==='accepted'))return toast('You are already connected.','info');
+    if(existing?.some(r=>r.status==='pending'))return toast('A connection request is already pending.','info');
+    const {error}=await client.from('connection_requests').insert({requester_id:S.currentUserId,recipient_id:userId,status:'pending'});
+    if(error)throw error;
+    toast('Connection request sent.','success'); await loadPeople();
+  } catch(error){toast(authErrorMessage(error),'error');}
+}
+async function respondConnection(requestId,accept) {
+  try {
+    const {error}=await getSupabase().from('connection_requests').update({status:accept?'accepted':'declined'}).eq('id',requestId).eq('recipient_id',S.currentUserId).eq('status','pending');
+    if(error)throw error;
+    const request=peopleRequests.find(r=>r.id===requestId), profile=peopleProfiles.find(p=>p.id===request?.requester_id);
+    if(accept){toast('You and '+(profile?.display_name||'this person')+' are now connected.','success');}
+    else toast('Request declined.','info');
+    await loadPeople();
+    if(accept&&profile)openConnectedChat(profile.id);
+  } catch(error){toast(authErrorMessage(error),'error');}
+}
+function openConnectedChat(userId) {
+  const profile=peopleProfiles.find(p=>p.id===userId);
+  if(!profile)return;
+  let chat=S.chats.find(c=>c.type==='dm'&&c.userId===userId);
+  if(!chat){chat={id:'dm_'+userId,type:'dm',userId,lastMsg:'',lastTime:now(),unread:0};S.chats.push(chat);S.messages[chat.id]=[];}
+  const user={id:profile.id,name:profile.display_name||profile.username,username:profile.username,email:'',bio:profile.bio||'',avatar:profile.avatar_url||IMG_POOL[0],role:'User',status:'active',verified:true,followers:0,following:0,blocked:[],twoFA:false};
+  S.users=S.users.filter(u=>u.id!==user.id);S.users.push(user);saveState();go('chats');openConv(chat.id);
+}
+function subscribePeopleRealtime() {
+  if(peopleChannel){try{getSupabase().removeChannel(peopleChannel);}catch{} peopleChannel=null;}
+  try {
+    const client=getSupabase();
+    peopleChannel=client.channel('people-live-'+S.currentUserId)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'connection_requests',filter:'recipient_id=eq.'+S.currentUserId},async payload=>{
+        const request=payload.new, p=peopleProfiles.find(x=>x.id===request.requester_id);
+        toast((p?.display_name||p?.username||'Someone')+' sent you a request to contact.','success');
+        if(S.settings.sounds)beep(); await loadPeople(); renderNotifs();
+      })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'connection_requests',filter:'requester_id=eq.'+S.currentUserId},async payload=>{
+        if(payload.new.status==='accepted'){const p=peopleProfiles.find(x=>x.id===payload.new.recipient_id);toast((p?.display_name||p?.username||'Someone')+' connected back with you.','success');}
+        await loadPeople();
+      }).subscribe();
+  } catch(error){console.warn('People realtime unavailable:',error.message);}
+}
+
 /* ══════════ NAVIGATION ══════════ */
 function go(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
