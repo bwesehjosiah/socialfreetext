@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -14,6 +15,7 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
+    private var pendingWebPermissionRequest: PermissionRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,10 +26,59 @@ class MainActivity : AppCompatActivity() {
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = WebViewClient()
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    runOnUiThread {
+                        if (request.origin.host != "socialfreetext.vercel.app" || request.origin.scheme != "https") {
+                            request.deny()
+                            return@runOnUiThread
+                        }
+                        val permissions = mutableListOf<String>()
+                        for (resource in request.resources) {
+                            when (resource) {
+                                PermissionRequest.RESOURCE_AUDIO_CAPTURE -> permissions.add(Manifest.permission.RECORD_AUDIO)
+                                PermissionRequest.RESOURCE_VIDEO_CAPTURE -> permissions.add(Manifest.permission.CAMERA)
+                                else -> {
+                                    request.deny()
+                                    return@runOnUiThread
+                                }
+                            }
+                        }
+                        val missing = permissions.distinct().filter {
+                            ContextCompat.checkSelfPermission(this@MainActivity, it) != PackageManager.PERMISSION_GRANTED
+                        }
+                        if (missing.isEmpty()) {
+                            request.grant(request.resources)
+                        } else if (pendingWebPermissionRequest == null) {
+                            pendingWebPermissionRequest = request
+                            ActivityCompat.requestPermissions(this@MainActivity, missing.toTypedArray(), 302)
+                        } else {
+                            request.deny()
+                        }
+                    }
+                }
+
+                override fun onPermissionRequestCanceled(request: PermissionRequest) {
+                    if (pendingWebPermissionRequest === request) pendingWebPermissionRequest = null
+                }
+            }
         }
         setContentView(webView)
         webView.loadUrl(targetUrl(intent?.getStringExtra("target")))
+    }
+
+    @Deprecated("Deprecated in Android API")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 302) {
+            val request = pendingWebPermissionRequest
+            pendingWebPermissionRequest = null
+            if (request != null) {
+                val allGranted = permissions.isNotEmpty() && grantResults.isNotEmpty() &&
+                    grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+                if (allGranted) request.grant(request.resources) else request.deny()
+            }
+        }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -36,12 +87,10 @@ class MainActivity : AppCompatActivity() {
         if (::webView.isInitialized) webView.loadUrl(targetUrl(intent.getStringExtra("target")))
     }
 
-    private fun targetUrl(target: String?): String {
-        return when (target) {
-            "call" -> "$APP_URL/?open=calls"
-            "reply" -> "$APP_URL/?open=chats&reply=1"
-            else -> APP_URL
-        }
+    private fun targetUrl(target: String?): String = when (target) {
+        "call" -> "$APP_URL/?open=calls"
+        "reply" -> "$APP_URL/?open=chats&reply=1"
+        else -> APP_URL
     }
 
     private fun requestNotificationPermission() {
