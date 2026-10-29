@@ -1817,6 +1817,8 @@ function callToggle(k) {
   callState[k] = !callState[k];
   const btn = $('call-'+k);
   btn.className = `w-14 h-14 rounded-full ${callState[k]?'bg-white text-gray-900':'bg-gray-800 text-white'} flex items-center justify-center`;
+  if(k==='mute'&&liveLocalStream)liveLocalStream.getAudioTracks().forEach(t=>t.enabled=!callState.muted);
+  if(k==='cam'&&liveLocalStream)liveLocalStream.getVideoTracks().forEach(t=>t.enabled=callState.cam);
   if (k === 'mute') btn.innerHTML = `<i class="fa-solid ${callState.muted?'fa-microphone-slash':'fa-microphone'}"></i>`;
   if (k === 'spk') btn.innerHTML = `<i class="fa-solid ${callState.spk?'fa-volume-high':'fa-volume-low'}"></i>`;
   if (k === 'cam') btn.innerHTML = `<i class="fa-solid ${callState.cam?'fa-video':'fa-video-slash'}"></i>`;
