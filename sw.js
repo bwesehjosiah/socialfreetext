@@ -2,7 +2,7 @@ const CACHE_NAME='socialfreetext-shell-v1';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil((async()=>{await self.clients.claim();const clientsList=await self.clients.matchAll({type:'window',includeUncontrolled:true});})())});
 self.addEventListener('push',event=>{
- let data={title:'SocialfreeText',body:'You have a new notification.',url:'/'};
+ let data={title:'SocialfreeText',body:'You have a new notification.',url:'/',kind:'message'};
  try{if(event.data)data={...data,...event.data.json()}}catch{try{data.body=event.data?.text()||data.body}catch{}}
  event.waitUntil(self.registration.showNotification(data.title||'SocialfreeText',{
   body:data.body||'You have a new notification.',
@@ -10,8 +10,10 @@ self.addEventListener('push',event=>{
   badge:data.badge||'/icon-192.png',
   tag:data.tag||'sft-push-'+Date.now(),
   renotify:true,
-  requireInteraction:!!data.requireInteraction,
-  data:{url:data.url||'/',type:data.type||'message',callId:data.callId||null}
+  requireInteraction:data.kind==='call'||data.type==='call'||!!data.requireInteraction,
+  vibrate:(data.kind==='call'||data.type==='call')?[500,250,500,250,900]:[250,150,250],
+  silent:false,
+  data:{url:data.url||'/',type:data.kind||data.type||'message',callId:data.callId||null}
  }));
 });
 self.addEventListener('notificationclick',event=>{
