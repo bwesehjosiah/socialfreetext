@@ -2538,8 +2538,31 @@ function sendBroadcast() {
 function openModal(id) { const el = $(id); if (!el) return; el.classList.remove('hidden'); el.classList.add('flex'); }
 function closeModal(id) { const el = $(id); if (!el) return; el.classList.add('hidden'); el.classList.remove('flex'); }
 
+function showEmailVerifiedOverlay() {
+  const overlay = document.createElement('div');
+  overlay.id = 'email-verified-overlay';
+  overlay.className = 'fixed inset-0 z-[300] flex items-center justify-center bg-emerald-600/95 backdrop-blur-sm p-6 text-white';
+  overlay.innerHTML = `
+    <div class="w-full max-w-sm text-center fade-up">
+      <div class="w-20 h-20 rounded-full bg-white/20 border-2 border-white/70 flex items-center justify-center mx-auto mb-5 shadow-xl">
+        <i class="fa-solid fa-check text-4xl"></i>
+      </div>
+      <h2 class="text-2xl font-black">Email verified successfully!</h2>
+      <p class="mt-2 text-sm text-emerald-50">Your email address is confirmed. You can now sign in.</p>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => {
+    overlay.style.transition = 'opacity .45s ease';
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 500);
+  }, 3000);
+}
+
 async function init() {
   applyTheme();
+  // Detect Supabase's email-confirmation callback before its URL fragment is cleared.
+  const callbackParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const emailWasVerified = callbackParams.get('type') === 'signup' || callbackParams.get('type') === 'email';
   // Local demo sessions are intentionally not trusted for authentication anymore.
   S.currentUserId = null;
   $('auth-screen').classList.remove('hidden');
@@ -2550,6 +2573,16 @@ async function init() {
     const client = getSupabase();
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
+    if (emailWasVerified) {
+      // Keep the user on the login screen after confirmation rather than auto-entering the app.
+      await client.auth.signOut();
+      history.replaceState(null, '', location.pathname + location.search);
+      $('auth-screen').classList.remove('hidden');
+      $('app').classList.add('hidden');
+      showAuth('login');
+      showEmailVerifiedOverlay();
+      return;
+    }
     if (data.session?.user) {
       await loadAuthenticatedProfile(data.session.user);
       saveState();
@@ -2560,6 +2593,7 @@ async function init() {
   } catch (error) {
     // Keep the login screen visible while configuration is incomplete.
     console.warn('SocialfreeText Supabase setup:', error.message);
+    if (emailWasVerified) showEmailVerifiedOverlay();
   }
 }
 
