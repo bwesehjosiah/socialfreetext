@@ -1311,6 +1311,7 @@ function go(view) {
   $('sb-overlay').classList.add('hidden');
   document.querySelector('main').scrollTop = 0;
   if (view === 'chats') renderChats();
+  if (view === 'people') { loadPeople().catch(error=>toast('Could not load people: '+authErrorMessage(error),'error')); }
   if (view === 'status') renderStatusList();
   if (view === 'calls') renderCalls();
   if (view === 'groups') renderGroups();
@@ -1332,6 +1333,8 @@ function initUI() {
   $('nav-admin').classList.toggle('hidden', !isAdmin);
   renderNotifs();
   renderChats();
+  subscribePeopleRealtime();
+  loadPeople().catch(error=>console.warn('People load:',error.message));
   go('chats');
 }
 
