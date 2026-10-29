@@ -11,6 +11,8 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
 tailwind.config = {
   darkMode: 'class',
@@ -933,6 +935,11 @@ function loadState() {
 function saveState() {
   try { localStorage.setItem('sft_v3', JSON.stringify(S)); } catch {}
 }
+// Remove legacy prototype passwords from browser storage immediately. Authentication is handled
+// by Supabase Auth; local demo passwords must never be retained or accepted.
+if (Array.isArray(S.users)) S.users.forEach(user => { if (user && Object.prototype.hasOwnProperty.call(user, 'password')) delete user.password; });
+S.currentUserId = null;
+saveState();
 const me = () => S.users.find(u => u.id === S.currentUserId);
 const userById = id => S.users.find(u => u.id === id);
 const chatById = id => S.chats.find(c => c.id === id);
@@ -970,52 +977,130 @@ function showAuth(view) {
   const sub = $('auth-sub');
   if (sub) sub.textContent = view === 'signup' ? 'Create your free account' : view === 'recovery' ? 'Recover your account' : 'Sign in to continue';
 }
-$('form-login').addEventListener('submit', e => {
+// Supabase browser configuration. Replace these placeholders with your project's URL and
+// publishable (or legacy anon) key. Never use a secret/service_role key in browser code.
+const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'YOUR_SUPABASE_PUBLISHABLE_KEY';
+let supabaseClient = null;
+function getSupabase() {
+  if (SUPABASE_URL.includes('YOUR_PROJECT_ID') || SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')) {
+    throw new Error('Supabase is not configured yet. Add your Project URL and publishable key in Index.html after creating your Supabase project.');
+  }
+  if (!window.supabase?.createClient) throw new Error('Supabase client did not load. Check your internet connection and reload.');
+  if (!supabaseClient) supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+  return supabaseClient;
+}
+function authErrorMessage(error) {
+  const message = String(error?.message || 'Authentication failed.');
+  if (/invalid login credentials/i.test(message)) return 'Email or password is incorrect.';
+  if (/email not confirmed/i.test(message)) return 'Please confirm your email using the link we sent you.';
+  if (/user already registered/i.test(message)) return 'An account with this email already exists.';
+  return message;
+}
+async function loadAuthenticatedProfile(authUser) {
+  const client = getSupabase();
+  let { data: profile, error } = await client.from('profiles')
+    .select('id, username, display_name, avatar_url, bio, created_at')
+    .eq('id', authUser.id).maybeSingle();
+  if (error) throw error;
+  // The SQL trigger creates this profile. Retry briefly in case the trigger's row is not
+  // immediately visible to the first read.
+  if (!profile) {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    ({ data: profile, error } = await client.from('profiles')
+      .select('id, username, display_name, avatar_url, bio, created_at')
+      .eq('id', authUser.id).maybeSingle());
+    if (error) throw error;
+  }
+  if (!profile) throw new Error('Your account exists, but its profile was not created. Apply supabase/schema.sql in the Supabase SQL Editor.');
+  const email = authUser.email || '';
+  const username = profile.username || email.split('@')[0] || 'user';
+  const user = {
+    id: authUser.id, name: profile.display_name || username, username, email,
+    bio: profile.bio || '', avatar: profile.avatar_url || IMG_POOL[0],
+    role: 'User', status: 'active', verified: Boolean(authUser.email_confirmed_at),
+    followers: 0, following: 0, recoveryEmail: '', blocked: [], twoFA: false,
+    joinedAt: profile.created_at || authUser.created_at
+  };
+  // Keep the existing UI running, but do not persist passwords or tokens in S/localStorage.
+  S.users = S.users.filter(item => item.id !== user.id);
+  // Do not retain prototype passwords for any local/demo user.
+  S.users.forEach(item => { if (Object.prototype.hasOwnProperty.call(item, 'password')) delete item.password; });
+  S.users.push(user);
+  S.currentUserId = user.id;
+  return user;
+}
+$('form-login').addEventListener('submit', async e => {
   e.preventDefault();
-  const id = $('login-id').value.trim().toLowerCase();
-  const pw = $('login-pw').value;
-  const u = S.users.find(x => (x.username.toLowerCase() === id || x.email.toLowerCase() === id) && x.password === pw);
-  if (!u) return toast('Invalid credentials', 'error');
-  if (u.status === 'suspended') return toast('Account suspended', 'error');
-  S.currentUserId = u.id;
-  S.logs.unshift(`[${new Date().toLocaleTimeString()}] [auth] ${u.username} signed in`);
-  saveState();
-  enterApp();
+  const button = $('form-login').querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Signing in…'; }
+  try {
+    const client = getSupabase();
+    const identifier = $('login-id').value.trim();
+    if (!identifier.includes('@')) {
+      throw new Error('Sign in with the email address for your account. Username sign-in will be available after username lookup is configured.');
+    }
+    const { data, error } = await client.auth.signInWithPassword({ email: identifier, password: $('login-pw').value });
+    if (error) throw error;
+    await loadAuthenticatedProfile(data.user);
+    saveState();
+    enterApp();
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Sign In'; }
+  }
 });
-$('form-signup').addEventListener('submit', e => {
+$('form-signup').addEventListener('submit', async e => {
   e.preventDefault();
   const name = $('su-name').value.trim();
-  const username = $('su-user').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
+  const username = $('su-user').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
   const email = $('su-email').value.trim().toLowerCase();
   const pw = $('su-pw').value;
   const bio = $('su-bio').value.trim();
-  if (username.length < 3) return toast('Username too short', 'error');
-  if (pw.length < 6) return toast('Password must be 6+ chars', 'error');
-  if (S.users.find(u => u.username === username)) return toast('Username taken', 'error');
-  if (S.users.find(u => u.email === email)) return toast('Email already registered', 'error');
-  const u = {
-    id:'u'+uid(), name, username, email, password:pw, bio,
-    avatar: IMG_POOL[Math.floor(Math.random()*IMG_POOL.length)],
-    role:'User', status:'active', verified:false,
-    followers:0, following:0, recoveryEmail:'', blocked:[], twoFA:false,
-    joinedAt: now()
-  };
-  S.users.push(u);
-  S.currentUserId = u.id;
-  S.logs.unshift(`[${new Date().toLocaleTimeString()}] [auth] new signup @${username}`);
-  saveState();
-  toast(`Welcome, ${name}! 🎉`, 'success');
-  enterApp();
+  if (username.length < 3 || username.length > 24) return toast('Username must be 3–24 letters, numbers, or underscores.', 'error');
+  if (pw.length < 8) return toast('Use a password of at least 8 characters.', 'error');
+  if (!name || !email) return toast('Enter your name and email address.', 'error');
+  const button = $('form-signup').querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Creating account…'; }
+  try {
+    const client = getSupabase();
+    const { data, error } = await client.auth.signUp({
+      email, password: pw,
+      options: { data: { username, display_name: name.slice(0, 80), bio: bio.slice(0, 300) } }
+    });
+    if (error) throw error;
+    if (data.session && data.user) {
+      await loadAuthenticatedProfile(data.user);
+      saveState();
+      toast('Account created successfully.', 'success');
+      enterApp();
+    } else {
+      toast('Account created. Check your email to confirm it, then sign in.', 'success');
+      showAuth('login');
+    }
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Create Account'; }
+  }
 });
-$('form-recovery').addEventListener('submit', e => {
+$('form-recovery').addEventListener('submit', async e => {
   e.preventDefault();
   const email = $('rc-email').value.trim().toLowerCase();
-  const u = S.users.find(x => x.email === email || x.recoveryEmail === email);
-  if (!u) return toast('No account found', 'error');
-  u.password = 'recover123';
-  saveState();
-  toast(`Recovery code sent. Temp password: recover123`, 'success');
-  showAuth('login');
+  if (!email) return toast('Enter the email address for your account.', 'error');
+  try {
+    const client = getSupabase();
+    const redirectTo = location.origin + location.pathname;
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+    toast('If an account exists for that email, a password reset link will be sent.', 'success');
+    showAuth('login');
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  }
 });
 
 /* ══════════ HIDDEN ADMIN LOGIN ══════════ */
@@ -1071,9 +1156,16 @@ function enterApp() {
   $('app').classList.remove('hidden');
   initUI();
 }
-function logout() {
+async function logout() {
   if (!confirm('Sign out of SocialfreeText?')) return;
-  S.logs.unshift(`[${new Date().toLocaleTimeString()}] [auth] ${me()?.username} signed out`);
+  try {
+    const client = getSupabase();
+    const { error } = await client.auth.signOut();
+    if (error) throw error;
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+    return;
+  }
   S.currentUserId = null;
   saveState();
   $('app').classList.add('hidden');
@@ -2222,17 +2314,25 @@ function toggle2FA(btn) {
   toast(`2FA ${u.twoFA?'enabled 🔒':'disabled'}`, u.twoFA ? 'success' : 'info');
 }
 function openPasswordChange() { $('pw-modal').classList.remove('hidden'); $('pw-modal').classList.add('flex'); $('pw-old').value=''; $('pw-new').value=''; $('pw-new2').value=''; }
-function changePassword(e) {
+async function changePassword(e) {
   e.preventDefault();
   const u = me();
-  if ($('pw-old').value !== u.password) return toast('Current password is incorrect', 'error');
+  if (!u?.email) return toast('Please sign in again before changing your password.', 'error');
+  const oldPassword = $('pw-old').value;
   const n = $('pw-new').value;
-  if (n.length < 6) return toast('New password must be 6+ chars', 'error');
+  if (n.length < 8) return toast('Use a password of at least 8 characters.', 'error');
   if (n !== $('pw-new2').value) return toast('Passwords do not match', 'error');
-  u.password = n;
-  saveState();
-  $('pw-modal').classList.add('hidden'); $('pw-modal').classList.remove('flex');
-  toast('Password updated 🔐', 'success');
+  try {
+    const client = getSupabase();
+    const { error: verifyError } = await client.auth.signInWithPassword({ email: u.email, password: oldPassword });
+    if (verifyError) throw verifyError;
+    const { error } = await client.auth.updateUser({ password: n });
+    if (error) throw error;
+    $('pw-modal').classList.add('hidden'); $('pw-modal').classList.remove('flex');
+    toast('Password updated securely.', 'success');
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  }
 }
 function openRecovery() {
   const u = me();
@@ -2435,17 +2535,28 @@ function sendBroadcast() {
 function openModal(id) { const el = $(id); if (!el) return; el.classList.remove('hidden'); el.classList.add('flex'); }
 function closeModal(id) { const el = $(id); if (!el) return; el.classList.add('hidden'); el.classList.remove('flex'); }
 
-function init() {
+async function init() {
   applyTheme();
+  // Local demo sessions are intentionally not trusted for authentication anymore.
+  S.currentUserId = null;
+  $('auth-screen').classList.remove('hidden');
+  $('app').classList.add('hidden');
+  showAuth('login');
   if (location.hash === '#admin') { openAdminLogin(); return; }
-  if (S.currentUserId && userById(S.currentUserId)) {
-    $('auth-screen').classList.add('hidden');
-    $('app').classList.remove('hidden');
-    initUI();
-  } else {
-    $('auth-screen').classList.remove('hidden');
-    $('app').classList.add('hidden');
-    showAuth('login');
+  try {
+    const client = getSupabase();
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+    if (data.session?.user) {
+      await loadAuthenticatedProfile(data.session.user);
+      saveState();
+      $('auth-screen').classList.add('hidden');
+      $('app').classList.remove('hidden');
+      initUI();
+    }
+  } catch (error) {
+    // Keep the login screen visible while configuration is incomplete.
+    console.warn('SocialfreeText Supabase setup:', error.message);
   }
 }
 
