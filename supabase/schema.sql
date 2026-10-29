@@ -72,6 +72,9 @@ $;
 -- This SECURITY DEFINER function is trigger-only; prevent direct RPC execution.
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
+-- This SECURITY DEFINER event-trigger function is not an RPC; deny direct execution.
+revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
 for each row execute procedure public.handle_new_user();
