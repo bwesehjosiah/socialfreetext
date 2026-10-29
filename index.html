@@ -1589,7 +1589,6 @@ function startLiveCallTimer(){if(callTimer)clearInterval(callTimer);callSec=0;$(
 async function cleanupLiveCall(){if(window.__sftRingStop){try{window.__sftRingStop()}catch{}window.__sftRingStop=null}if(livePeer){livePeer.close();livePeer=null}if(liveLocalStream){liveLocalStream.getTracks().forEach(t=>t.stop());liveLocalStream=null}document.getElementById('live-remote-media')?.remove();$('call-answer')?.classList.add('hidden');$('call-scr')?.classList.add('hidden');$('call-scr')?.classList.remove('flex');if(callTimer)clearInterval(callTimer);callTimer=null;liveIncoming=false;liveCallPeerId=null}
 async function endLiveCall(){const p=liveCallPeerId,k=liveCallKind;if(p)try{await sendCallSignal(p,k,'hangup')}catch{}await cleanupLiveCall()}
 
-async 
 async function sendEncryptedVoice(chunks,duration,stream){
  const c=chatById(activeChat);
  try{
@@ -1616,7 +1615,7 @@ async function playEncryptedVoice(url,senderId,messageId){
  }catch(e){toast('Cannot play voice message: '+e.message,'error')}
 }
 
-function sendMsg() {
+async function sendMsg() {
  const inp=$('msg-in'), text=inp.value.trim(), c=chatById(activeChat);
  if(!text||!c)return;
  if(c.type!=='dm'||!liveConnected(c.userId))return toast('Connect with this user before sending private messages.','error');
