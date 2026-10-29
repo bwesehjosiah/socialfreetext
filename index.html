@@ -1822,14 +1822,9 @@ function startCall(kind, userId) {
   }, 1500);
 }
 function callToggle(k) {
-  callState[k] = !callState[k];
-  const btn = $('call-'+k);
-  btn.className = `w-14 h-14 rounded-full ${callState[k]?'bg-white text-gray-900':'bg-gray-800 text-white'} flex items-center justify-center`;
-  if(k==='mute'&&liveLocalStream)liveLocalStream.getAudioTracks().forEach(t=>t.enabled=!callState.muted);
-  if(k==='cam'&&liveLocalStream)liveLocalStream.getVideoTracks().forEach(t=>t.enabled=callState.cam);
-  if (k === 'mute') btn.innerHTML = `<i class="fa-solid ${callState.muted?'fa-microphone-slash':'fa-microphone'}"></i>`;
-  if (k === 'spk') btn.innerHTML = `<i class="fa-solid ${callState.spk?'fa-volume-high':'fa-volume-low'}"></i>`;
-  if (k === 'cam') btn.innerHTML = `<i class="fa-solid ${callState.cam?'fa-video':'fa-video-slash'}"></i>`;
+ if(k==='mute'){callState.muted=!callState.muted;if(liveLocalStream)liveLocalStream.getAudioTracks().forEach(t=>t.enabled=!callState.muted);const b=$('call-mute');b.className='w-14 h-14 rounded-full '+(callState.muted?'bg-red-600 text-white':'bg-gray-800 text-white')+' flex items-center justify-center';b.innerHTML='<i class="fa-solid '+(callState.muted?'fa-microphone-slash':'fa-microphone')+'"></i>';b.title=callState.muted?'Unmute microphone':'Mute microphone';return;}
+ if(k==='cam'){callState.cam=!callState.cam;if(liveLocalStream)liveLocalStream.getVideoTracks().forEach(t=>t.enabled=callState.cam);const b=$('call-cam');b.className='w-14 h-14 rounded-full '+(callState.cam?'bg-gray-800 text-white':'bg-red-600 text-white')+' flex items-center justify-center';b.innerHTML='<i class="fa-solid '+(callState.cam?'fa-video':'fa-video-slash')+'"></i>';b.title=callState.cam?'Turn camera off':'Turn camera on';return;}
+ if(k==='spk'){callState.spk=!callState.spk;const remote=document.getElementById('live-remote-media');if(remote&&remote.tagName==='AUDIO')remote.muted=callState.spk;else if(remote&&remote.tagName==='VIDEO')remote.muted=callState.spk;const b=$('call-spk');b.className='w-14 h-14 rounded-full '+(callState.spk?'bg-red-600 text-white':'bg-gray-800 text-white')+' flex items-center justify-center';b.innerHTML='<i class="fa-solid '+(callState.spk?'fa-volume-xmark':'fa-volume-high')+'"></i>';b.title=callState.spk?'Turn call audio on':'Mute call audio';}
 }
 function endCall() {
   clearInterval(callTimer);
