@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "891342107077",
+    "project_id": "studio-496646166-6ddbb",
+    "storage_bucket": "studio-496646166-6ddbb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:891342107077:android:1c39d2a412689d45671bac",
+        "android_client_info": {
+          "package_name": "com.socialfreetext.app"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9sVkXo6DyGtLiro6yfuoJlL-tXoDOfxU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
