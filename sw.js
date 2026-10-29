@@ -13,11 +13,13 @@ self.addEventListener('push',event=>{
   requireInteraction:data.kind==='call'||data.type==='call'||!!data.requireInteraction,
   vibrate:(data.kind==='call'||data.type==='call')?[500,250,500,250,900]:[250,150,250],
   silent:false,
+  actions:(data.kind==='call'||data.type==='call')?[{action:'open-app',title:'Open SocialfreeText'},{action:'dismiss',title:'Dismiss'}]:[{action:'open-app',title:'Open message'}],
   data:{url:data.url||'/',type:data.kind||data.type||'message',callId:data.callId||null}
  }));
 });
 self.addEventListener('notificationclick',event=>{
  event.notification.close();
+ if(event.action==='dismiss')return;
  const target=new URL(event.notification.data?.url||'/',self.location.origin).href;
  event.waitUntil((async()=>{
   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
