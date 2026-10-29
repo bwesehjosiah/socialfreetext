@@ -1069,7 +1069,10 @@ $('form-signup').addEventListener('submit', async e => {
     const client = getSupabase();
     const { data, error } = await client.auth.signUp({
       email, password: pw,
-      options: { data: { username, display_name: name.slice(0, 80), bio: bio.slice(0, 300) } }
+      options: {
+        emailRedirectTo: window.location.origin + window.location.pathname,
+        data: { username, display_name: name.slice(0, 80), bio: bio.slice(0, 300) }
+      }
     });
     if (error) throw error;
     if (data.session && data.user) {
