@@ -1505,7 +1505,7 @@ function setupDMTyping(chat){
  stopDMTyping();if(!chat||chat.type!=='dm'||!S.currentUserId||!chat.userId)return;
  const ids=[S.currentUserId,chat.userId].sort();dmTypingPeer=chat.userId;
  const client=getSupabase();dmTypingChannel=client.channel('sft-dm-typing-'+ids.join('-'),{config:{broadcast:{self:false}}})
- .on('broadcast',{event:'typing'},payload=>{if(payload.payload?.userId!==dmTypingPeer||activeChat!==chat.id)return;setDMHeaderStatus('Typing…');if(dmTypingHideTimer)clearTimeout(dmTypingHideTimer);dmTypingHideTimer=setTimeout(()=>{if(activeChat===chat.id)setDMHeaderStatus(liveOnlineIds.has(chat.userId)?'Online':'Offline')},2200)})
+ .on('broadcast',{event:'typing'},payload=>{if(payload.payload?.userId!==dmTypingPeer||activeChat!==chat.id)return;if(!payload.payload?.typing){if(dmTypingHideTimer)clearTimeout(dmTypingHideTimer);setDMHeaderStatus(liveOnlineIds.has(chat.userId)?'Online':'Offline');return}setDMHeaderStatus('Typing…');if(dmTypingHideTimer)clearTimeout(dmTypingHideTimer);dmTypingHideTimer=setTimeout(()=>{if(activeChat===chat.id)setDMHeaderStatus(liveOnlineIds.has(chat.userId)?'Online':'Offline')},2200)})
  .subscribe();
 }
 function notifyDMtyping(el){
