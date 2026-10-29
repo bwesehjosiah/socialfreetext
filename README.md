@@ -2,19 +2,24 @@
 
 **SocialfreeText — Chat, Status, Calls, and AI Hub**
 
-This repository currently contains a single-file HTML prototype (`Index.html`). Its existing interface is primarily a browser-local demo and is not yet ready for real user accounts or private online messaging.
+This repository contains a single-file HTML prototype (`Index.html`) with a Supabase authentication integration scaffold. It is not yet a production-ready social messaging service.
 
-## Backend foundation
+## Current status
 
-The `supabase/` folder contains an initial Supabase schema and setup guide:
+- Supabase email/password sign-in, registration, session restoration, password-reset email requests, and sign-out are wired in the frontend code.
+- You must create your own Supabase project, apply `supabase/schema.sql`, and replace the configuration placeholders in `Index.html` with the Project URL and publishable key before authentication can work.
+- Chats, groups, calls, admin tools, AI history, and statuses still largely use browser-local prototype state. Messages and statuses are not yet synchronized online between users/devices.
+- The authentication integration has not been tested against a live Supabase project. Do not launch or invite real users yet.
 
-- `supabase/schema.sql` — profiles, direct messages, expiring statuses, explicit grants, and Row Level Security (RLS) policies.
-- `supabase/README.md` — setup steps and the required frontend migration sequence.
+## Backend setup
 
-### Current status
+See `supabase/README.md` for the setup checklist, security notes, and remaining migration work.
 
-The schema is a foundation, not a completed production integration. The current HTML still uses localStorage for demo users, passwords, messages, and statuses. Do not use it for real user credentials until the UI is migrated to Supabase Auth and the database. Never commit a Supabase secret or `service_role` key.
+- `supabase/schema.sql` — profiles, direct messages, expiring statuses, grants, and Row Level Security (RLS) policies.
+- `supabase/README.md` — project configuration and integration status.
 
-## Run it
+**Security:** Never store passwords in app tables or commit a Supabase secret / `service_role` key. Only a publishable (or legacy anon) key belongs in browser code, protected by correct RLS policies.
 
-You can open the HTML file locally for a prototype preview. For production hosting, configure a static host and use lowercase `index.html` as the entry page. Set the production URL in Supabase Auth redirect settings after deployment.
+## Preview and hosting
+
+You can open `Index.html` locally for a UI preview. For common static hosts such as GitHub Pages, use lowercase `index.html` as the entry page and configure the production URL in Supabase Auth redirect settings.
