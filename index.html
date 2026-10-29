@@ -1,0 +1,2602 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>SocialfreeText — Chat · Status · Calls · AI</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: {
+    colors: { brand: {50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',950:'#1e1b4b',gold:'#fbbf24'} },
+    fontFamily: { sans: ['Inter','system-ui','sans-serif'] }
+  }}
+}
+</script>
+<style>
+  *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+  html,body{height:100%;overscroll-behavior:none;touch-action:manipulation}
+  body{font-family:'Inter',sans-serif}
+  /* Mobile ergonomics, safe areas, and accessible focus states */
+  :root{--app-height:100vh}
+  @supports (height:100dvh){:root{--app-height:100dvh}}
+  body{min-height:var(--app-height)}
+  input,select,textarea,button{font:inherit}
+  input,select,textarea{font-size:16px}
+  button,[role="button"],a{touch-action:manipulation}
+  button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid #818cf8;outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+  @media(max-width:767px){
+    #v-chats{height:var(--app-height)}
+    #v-chats>div{min-height:var(--app-height)!important;height:var(--app-height)}
+    #chat-list,#conv-pane{height:var(--app-height)!important}
+    #chat-list button{min-height:44px}
+  }
+  .no-sb::-webkit-scrollbar{display:none} .no-sb{-ms-overflow-style:none;scrollbar-width:none}
+  .sb::-webkit-scrollbar{width:5px;height:5px}
+  .sb::-webkit-scrollbar-thumb{background:rgba(156,163,175,.4);border-radius:9999px}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .fade-up{animation:fadeUp .3s cubic-bezier(.16,1,.3,1) both}
+  @keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.35)}100%{transform:scale(1)}}
+  .pop{animation:pop .35s ease}
+  @keyframes pulse-ring{0%{transform:scale(.95);opacity:.8}50%{transform:scale(1.06);opacity:.4}100%{transform:scale(.95);opacity:.8}}
+  .pulse-ring{animation:pulse-ring 2s infinite ease-in-out}
+  @keyframes slideIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+  .slide-in{animation:slideIn .3s cubic-bezier(.16,1,.3,1) both}
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .slide-up{animation:slideUp .28s cubic-bezier(.16,1,.3,1) both}
+  @keyframes typing{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-4px);opacity:1}}
+  .tdot{width:6px;height:6px;border-radius:99px;background:currentColor;display:inline-block;animation:typing 1.2s infinite}
+  .tdot:nth-child(2){animation-delay:.15s} .tdot:nth-child(3){animation-delay:.3s}
+  @keyframes rec{0%,100%{opacity:1}50%{opacity:.3}}
+  .recording{animation:rec 1s infinite}
+  @keyframes storyFill{from{width:0}to{width:100%}}
+  .story-prog>i{display:block;height:100%;width:0;background:#fff}
+  .story-prog.active>i{animation:storyFill 5s linear forwards}
+  .glass{background:rgba(255,255,255,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .dark .glass{background:rgba(10,12,20,.82)}
+  .grad-1{background:linear-gradient(135deg,#6366f1,#a855f7)}
+  .grad-2{background:linear-gradient(135deg,#06b6d4,#3b82f6)}
+  .grad-3{background:linear-gradient(135deg,#f59e0b,#ef4444)}
+  .grad-4{background:linear-gradient(135deg,#10b981,#14b8a6)}
+  .grad-5{background:linear-gradient(135deg,#ec4899,#8b5cf6)}
+  .bubble-me{background:#4f46e5;color:#fff;border-radius:16px 16px 4px 16px}
+  .bubble-them{background:#fff;color:#111827;border-radius:16px 16px 16px 4px}
+  .dark .bubble-them{background:#1f2937;color:#f3f4f6}
+  .wave-bar{width:3px;border-radius:99px;background:currentColor;opacity:.7}
+  .safe-b{padding-bottom:env(safe-area-inset-bottom)}
+  .safe-t{padding-top:env(safe-area-inset-top)}
+  .set-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem;transition:background .15s}
+  .set-row:hover{background:rgba(99,102,241,.04)}
+  .dark .set-row:hover{background:rgba(99,102,241,.08)}
+  .set-ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+</style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-950 text-gray-800 dark:text-gray-100 antialiased h-screen overflow-hidden" style="height:100vh;height:100dvh">
+
+<!-- ══════════ SPLASH / LOADER SCREEN ══════════ -->
+<div id="loader" class="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-gray-950 text-white transition-opacity duration-700 opacity-100">
+  <div class="relative flex items-center justify-center mb-6">
+    <!-- Outer spinning ring -->
+    <div class="w-20 h-20 border-4 border-brand-500/25 border-t-brand-500 rounded-full animate-spin"></div>
+    <!-- Center bolt icon -->
+    <i class="fa-solid fa-bolt text-brand-500 text-3xl absolute"></i>
+  </div>
+  <h1 class="text-2xl font-black tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+    SocialfreeText
+  </h1>
+  <p class="text-[11px] text-gray-500 mt-2 tracking-[0.2em] uppercase animate-pulse">
+    Initializing BOI Engine &amp; AI Hub…
+  </p>
+</div>
+
+<!-- ══════════ AUTH ══════════ -->
+<div id="auth-screen" class="fixed inset-0 z-[150] hidden bg-gray-950 overflow-y-auto">
+  <div class="min-h-full flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-7 border border-gray-200 dark:border-gray-800 shadow-2xl">
+      <div class="text-center mb-7">
+        <div id="brand-logo" class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-400 text-white flex items-center justify-center mx-auto mb-3 text-2xl shadow-xl shadow-brand-600/30 cursor-pointer select-none">
+          <i class="fa-solid fa-bolt"></i>
+        </div>
+        <h1 class="text-2xl font-black">SocialfreeText</h1>
+        <p class="text-xs text-gray-500 mt-1" id="auth-sub">Sign in to continue</p>
+      </div>
+
+      <!-- Login -->
+      <form id="form-login" class="space-y-3">
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">EMAIL OR USERNAME</label>
+          <input id="login-id" type="text" required autocomplete="username" placeholder="you@email.com" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">PASSWORD</label>
+          <input id="login-pw" type="password" required autocomplete="current-password" placeholder="••••••••" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <button type="submit" class="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm shadow-lg shadow-brand-600/25">Sign In</button>
+        <div class="flex justify-between text-xs text-gray-400 pt-1">
+          <button type="button" onclick="showAuth('recovery')" class="hover:underline">Forgot password?</button>
+          <button type="button" onclick="showAuth('signup')" class="text-brand-500 font-bold hover:underline">Create account</button>
+        </div>
+      </form>
+
+      <!-- Signup -->
+      <form id="form-signup" class="space-y-3 hidden">
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">FULL NAME</label>
+          <input id="su-name" type="text" required placeholder="John Doe" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">USERNAME</label>
+          <input id="su-user" type="text" required placeholder="johndoe" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">EMAIL</label>
+          <input id="su-email" type="email" required placeholder="you@email.com" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">PASSWORD</label>
+          <input id="su-pw" type="password" required placeholder="min 6 chars" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">BIO (optional)</label>
+          <input id="su-bio" type="text" placeholder="Tell us about you..." class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <button type="submit" class="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm shadow-lg shadow-brand-600/25">Create Account</button>
+        <div class="text-center text-xs text-gray-400 pt-1">
+          <button type="button" onclick="showAuth('login')" class="text-brand-500 font-bold hover:underline">Back to sign in</button>
+        </div>
+      </form>
+
+      <!-- Recovery -->
+      <form id="form-recovery" class="space-y-3 hidden">
+        <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-[11px] text-amber-700 dark:text-amber-400">
+          <i class="fa-solid fa-circle-info mr-1"></i> Enter your email and we'll send a recovery code.
+        </div>
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">EMAIL</label>
+          <input id="rc-email" type="email" required placeholder="you@email.com" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <button type="submit" class="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm">Send Recovery Code</button>
+        <div class="text-center text-xs text-gray-400 pt-1">
+          <button type="button" onclick="showAuth('login')" class="text-brand-500 font-bold hover:underline">Back to sign in</button>
+        </div>
+      </form>
+
+      <p class="text-center text-[10px] text-gray-500 mt-6 leading-relaxed">
+        By continuing you agree to our <a href="#" class="text-brand-500 underline">Terms</a> and <a href="#" class="text-brand-500 underline">Privacy Policy</a>.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ADMIN LOGIN (hidden, only for #admin or 7-tap) ══════════ -->
+<div id="admin-login" class="fixed inset-0 z-[160] hidden bg-black/90 backdrop-blur-md items-center justify-center p-4">
+  <div class="w-full max-w-sm bg-gray-900 rounded-3xl p-6 border border-amber-500/30 shadow-2xl shadow-amber-500/10 fade-up">
+    <div class="text-center mb-5">
+      <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mx-auto mb-3 text-2xl text-gray-950 shadow-lg shadow-amber-500/30">
+        <i class="fa-solid fa-crown"></i>
+      </div>
+      <h2 class="text-lg font-black text-amber-400">Restricted Access</h2>
+      <p class="text-[11px] text-gray-500 mt-1">Super Admin authentication required</p>
+    </div>
+    <form onsubmit="adminLogin(event)" class="space-y-3">
+      <input id="ad-user" type="text" required placeholder="Admin username" autocomplete="username" class="w-full px-4 py-3 rounded-xl bg-gray-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+      <input id="ad-pw" type="password" required placeholder="Admin password" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl bg-gray-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+      <button type="submit" class="w-full py-3 bg-gradient-to-r from-amber-400 to-amber-600 text-gray-950 font-black rounded-xl text-sm shadow-lg shadow-amber-500/25">Authenticate</button>
+      <button type="button" onclick="closeAdminLogin()" class="w-full py-2 text-xs text-gray-500 hover:text-white">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════ APP ══════════ -->
+<div id="app" class="h-full flex flex-col hidden">
+
+  <!-- HEADER -->
+  <header class="shrink-0 h-14 safe-t glass border-b border-gray-200 dark:border-gray-800 px-3 flex items-center justify-between z-40">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <button id="burger" class="md:hidden w-9 h-9 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-800 flex items-center justify-center">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="flex items-center gap-2 cursor-pointer" onclick="go('chats')">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-md shadow-brand-600/25">
+          <i class="fa-solid fa-bolt text-white text-sm"></i>
+        </div>
+        <span class="font-black text-base tracking-tight hidden xs:inline sm:inline bg-gradient-to-r from-brand-600 to-purple-500 bg-clip-text text-transparent">SocialfreeText</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-0.5">
+      <button onclick="go('search')" class="w-9 h-9 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-800 flex items-center justify-center">
+        <i class="fa-solid fa-magnifying-glass"></i>
+      </button>
+      <button onclick="toggleTheme()" class="w-9 h-9 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-800 flex items-center justify-center">
+        <i id="theme-ico" class="fa-solid fa-moon"></i>
+      </button>
+      <button onclick="toggleNotif()" class="relative w-9 h-9 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-800 flex items-center justify-center">
+        <i class="fa-regular fa-bell"></i>
+        <span id="notif-dot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500"></span>
+      </button>
+      <button onclick="go('profile')" class="ml-1">
+        <img id="hdr-avatar" class="w-8 h-8 rounded-full object-cover border-2 border-brand-500/40" src="">
+      </button>
+    </div>
+  </header>
+
+  <!-- BODY -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- Notifications panel -->
+    <div id="notif-panel" class="hidden absolute top-2 right-2 md:right-4 w-80 max-w-[calc(100vw-1rem)] bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl z-50 overflow-hidden fade-up">
+      <div class="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+        <h3 class="font-bold text-sm">Notifications</h3>
+        <button onclick="markRead()" class="text-[10px] font-bold text-brand-500">Mark read</button>
+      </div>
+      <div id="notif-list" class="max-h-80 overflow-y-auto sb divide-y divide-gray-100 dark:divide-gray-800/60"></div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="w-64 shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col absolute md:relative z-40 h-full -translate-x-full md:translate-x-0 transition-transform">
+      <div class="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2.5">
+        <img id="sb-avatar" class="w-10 h-10 rounded-full object-cover ring-2 ring-brand-500/30" src="">
+        <div class="min-w-0 flex-1">
+          <p id="sb-name" class="font-bold text-sm truncate">—</p>
+          <p id="sb-handle" class="text-[10px] text-gray-400 truncate">—</p>
+        </div>
+      </div>
+      <nav class="flex-1 overflow-y-auto sb p-2 space-y-0.5">
+        <button onclick="go('chats')" data-nav="chats" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <i class="fa-solid fa-comment-dots w-5 text-center"></i><span>Chats</span>
+          <span id="sb-chat-badge" class="ml-auto bg-brand-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full"></span>
+        </button>
+        <button onclick="go('status')" data-nav="status" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <i class="fa-solid fa-circle-notch w-5 text-center text-emerald-500"></i><span>Status</span>
+        </button>
+        <button onclick="go('calls')" data-nav="calls" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <i class="fa-solid fa-phone w-5 text-center text-blue-500"></i><span>Calls</span>
+        </button>
+        <button onclick="go('groups')" data-nav="groups" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <i class="fa-solid fa-users w-5 text-center text-amber-500"></i><span>Groups</span>
+        </button>
+        <button onclick="go('communities')" data-nav="communities" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <i class="fa-solid fa-globe w-5 text-center text-cyan-500"></i><span>Communities</span>
+        </button>
+        <div class="pt-3 pb-1 px-3 text-[10px] font-black text-gray-400 tracking-wider">INTELLIGENCE</div>
+        <button onclick="go('ai')" data-nav="ai" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <i class="fa-solid fa-robot w-5 text-center text-purple-500"></i><span class="bg-gradient-to-r from-purple-500 to-indigo-500 bg-clip-text text-transparent font-bold">Boi AchiverAI</span>
+        </button>
+        <div class="pt-3 pb-1 px-3 text-[10px] font-black text-gray-400 tracking-wider">ACCOUNT</div>
+        <button onclick="go('profile')" data-nav="profile" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <i class="fa-solid fa-user w-5 text-center"></i><span>Profile</span>
+        </button>
+        <button onclick="go('settings')" data-nav="settings" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <i class="fa-solid fa-gear w-5 text-center"></i><span>Settings</span>
+        </button>
+        <button id="nav-admin" onclick="go('admin')" data-nav="admin" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition hidden">
+          <i class="fa-solid fa-crown w-5 text-center"></i><span>Admin Panel</span>
+        </button>
+      </nav>
+      <div class="p-2 border-t border-gray-100 dark:border-gray-800">
+        <button onclick="logout()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition">
+          <i class="fa-solid fa-right-from-bracket w-5 text-center"></i><span>Sign Out</span>
+        </button>
+      </div>
+    </aside>
+    <div id="sb-overlay" class="hidden fixed inset-0 bg-black/50 z-30 md:hidden"></div>
+
+    <!-- MAIN -->
+    <main class="flex-1 overflow-y-auto sb relative bg-gray-50 dark:bg-gray-950 pb-20 md:pb-0">
+
+      <!-- ═══ CHATS ═══ -->
+      <section id="v-chats" class="view">
+        <div class="flex h-full" style="min-height:calc(100vh - 3.5rem)">
+          <div id="chat-list" class="w-full md:w-80 lg:w-96 shrink-0 bg-white dark:bg-gray-900 md:border-r border-gray-200 dark:border-gray-800 flex flex-col" style="height:calc(100vh - 3.5rem)">
+            <div class="p-3 border-b border-gray-100 dark:border-gray-800">
+              <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                <input id="chat-q" oninput="renderChats()" type="text" placeholder="Search or start new chat" class="w-full pl-9 pr-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+              </div>
+            </div>
+            <div id="chat-items" class="flex-1 overflow-y-auto sb"></div>
+          </div>
+          <div id="conv-pane" class="hidden md:flex flex-1 flex-col bg-gray-100 dark:bg-gray-950" style="height:calc(100vh - 3.5rem)">
+            <div id="conv-empty" class="flex-1 flex flex-col items-center justify-center text-center p-6">
+              <div class="w-20 h-20 rounded-3xl bg-brand-500/10 flex items-center justify-center text-brand-500 text-3xl mb-4">
+                <i class="fa-solid fa-comments"></i>
+              </div>
+              <h3 class="font-bold text-lg">Your Messages</h3>
+              <p class="text-xs text-gray-500 mt-1 max-w-xs">Select a chat to start messaging. Voice notes, images, stickers, and files — all free.</p>
+            </div>
+            <div id="conv-active" class="hidden flex-1 flex-col h-full"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ STATUS ═══ -->
+      <section id="v-status" class="view hidden max-w-2xl mx-auto p-3 space-y-4">
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-black">Status</h1>
+          <button onclick="openStatusCreator()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> Add Status
+          </button>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div class="p-3 flex items-center gap-3 border-b border-gray-100 dark:border-gray-800">
+            <div class="relative">
+              <img id="st-me-av" class="w-12 h-12 rounded-full object-cover" src="">
+              <div onclick="openStatusCreator()" class="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] border-2 border-white dark:border-gray-900 cursor-pointer">
+                <i class="fa-solid fa-plus"></i>
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm">My Status</p>
+              <p class="text-[11px] text-gray-500" id="my-status-hint">Tap to add status update</p>
+            </div>
+          </div>
+          <div class="p-2">
+            <p class="text-[10px] font-black text-gray-400 tracking-wider px-2 py-1">RECENT UPDATES</p>
+            <div id="status-list" class="divide-y divide-gray-100 dark:divide-gray-800/60"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ CALLS ═══ -->
+      <section id="v-calls" class="view hidden max-w-2xl mx-auto p-3 space-y-4">
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-black">Calls</h1>
+          <button onclick="newCallPicker()" class="px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5">
+            <i class="fa-solid fa-phone"></i> New Call
+          </button>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <p class="text-[10px] font-black text-gray-400 tracking-wider px-4 py-3 border-b border-gray-100 dark:border-gray-800">RECENT</p>
+          <div id="call-list" class="divide-y divide-gray-100 dark:divide-gray-800/60"></div>
+        </div>
+      </section>
+
+      <!-- ═══ GROUPS ═══ -->
+      <section id="v-groups" class="view hidden max-w-2xl mx-auto p-3 space-y-4">
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-black">Groups</h1>
+          <button onclick="openGroupCreator()" class="px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> New Group
+          </button>
+        </div>
+        <div id="groups-list" class="space-y-2"></div>
+      </section>
+
+      <!-- ═══ COMMUNITIES ═══ -->
+      <section id="v-communities" class="view hidden max-w-3xl mx-auto p-3 space-y-4">
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-black">Communities</h1>
+          <button onclick="openCommunityCreator()" class="px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> New
+          </button>
+        </div>
+        <div id="communities-list" class="space-y-3"></div>
+      </section>
+
+      <!-- ═══ AI ═══ -->
+      <section id="v-ai" class="view hidden flex-col h-full" style="height:calc(100vh - 3.5rem)">
+        <div class="p-3 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-purple-900/20 to-indigo-900/20 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shrink-0">
+              <i class="fa-solid fa-brain"></i>
+            </div>
+            <div class="min-w-0">
+              <h2 class="font-black text-sm truncate">Boi AchiverAI</h2>
+              <p class="text-[10px] text-purple-400 truncate" id="ai-status">Online · Free Assistant</p>
+            </div>
+          </div>
+          <button onclick="clearAi()" class="text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 px-3 py-2 rounded-xl border border-purple-500/25 font-bold">Clear</button>
+        </div>
+        <div id="ai-stream" class="flex-1 overflow-y-auto sb p-4 space-y-4"></div>
+        <div class="p-3 border-t border-gray-200 dark:border-gray-800 space-y-2 bg-white dark:bg-gray-900">
+          <div class="flex gap-2 overflow-x-auto no-sb pb-1">
+            <button onclick="aiQuick('Summarize my last conversation')" class="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[11px] font-semibold whitespace-nowrap">📝 Summarize</button>
+            <button onclick="aiQuick('Write a status update about my day')" class="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[11px] font-semibold whitespace-nowrap">✨ Caption</button>
+            <button onclick="aiQuick('Help me write a message to a friend')" class="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[11px] font-semibold whitespace-nowrap">💬 Write msg</button>
+            <button onclick="aiQuick('Explain Quantum Computing simply')" class="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[11px] font-semibold whitespace-nowrap">❓ Question</button>
+          </div>
+          <div class="flex gap-2">
+            <input id="ai-in" type="text" placeholder="Ask Boi AchiverAI anything…" class="flex-1 bg-gray-100 dark:bg-gray-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500">
+            <button onclick="aiSend()" id="ai-send" class="w-11 h-11 rounded-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center shadow-lg shadow-purple-600/25 shrink-0">
+              <i class="fa-solid fa-paper-plane text-sm"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ PROFILE ═══ -->
+      <section id="v-profile" class="view hidden max-w-2xl mx-auto p-3 space-y-4">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div class="h-28 bg-gradient-to-r from-brand-600 via-purple-600 to-pink-500 relative">
+            <button onclick="editProfile()" class="absolute bottom-2 right-2 px-3 py-1.5 rounded-xl bg-black/40 backdrop-blur text-white text-[11px] font-bold">
+              <i class="fa-solid fa-pen mr-1"></i> Edit
+            </button>
+          </div>
+          <div class="p-4 -mt-12">
+            <div class="flex items-end gap-4 mb-3">
+              <div class="relative">
+                <img id="pr-av" class="w-24 h-24 rounded-2xl object-cover border-4 border-white dark:border-gray-900 shadow-xl" src="">
+                <button onclick="editProfile()" class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs border-2 border-white dark:border-gray-900">
+                  <i class="fa-solid fa-camera"></i>
+                </button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <h1 id="pr-name" class="text-xl font-black">—</h1>
+              <i id="pr-badge" class="fa-solid fa-circle-check text-brand-500 text-sm hidden"></i>
+            </div>
+            <p id="pr-handle" class="text-xs text-gray-500 mt-0.5">—</p>
+            <p id="pr-bio" class="text-sm mt-3 leading-relaxed">—</p>
+            <div class="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+              <div class="text-center">
+                <p id="pr-posts" class="text-lg font-black">0</p>
+                <p class="text-[10px] text-gray-500">Posts</p>
+              </div>
+              <div class="text-center">
+                <p id="pr-followers" class="text-lg font-black">0</p>
+                <p class="text-[10px] text-gray-500">Followers</p>
+              </div>
+              <div class="text-center">
+                <p id="pr-following" class="text-lg font-black">0</p>
+                <p class="text-[10px] text-gray-500">Following</p>
+              </div>
+            </div>
+            <div class="mt-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
+              <div>
+                <p class="text-[10px] font-black text-gray-400 tracking-wider">ROLE</p>
+                <p id="pr-role" class="font-bold text-sm">—</p>
+              </div>
+              <div class="text-right">
+                <p class="text-[10px] font-black text-gray-400 tracking-wider">STATUS</p>
+                <p id="pr-status" class="font-bold text-sm text-emerald-500">Active</p>
+              </div>
+            </div>
+            <button onclick="go('settings')" class="mt-4 w-full py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+              <i class="fa-solid fa-gear mr-1.5"></i>Account Settings
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ SETTINGS CENTER ═══ -->
+      <section id="v-settings" class="view hidden max-w-2xl mx-auto p-3 space-y-4">
+        <div class="flex items-center gap-3">
+          <button id="settings-back" onclick="settingsBack()" class="hidden w-9 h-9 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+            <i class="fa-solid fa-arrow-left text-sm"></i>
+          </button>
+          <h1 id="settings-title" class="text-xl font-black">Settings</h1>
+        </div>
+
+        <!-- MAIN SETTINGS LIST -->
+        <div id="settings-main" class="space-y-3">
+          <!-- Account card -->
+          <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div class="p-4 flex items-center gap-3">
+              <img id="set-av" class="w-14 h-14 rounded-full object-cover ring-2 ring-brand-500/30" src="">
+              <div class="flex-1 min-w-0">
+                <p id="set-name" class="font-black text-sm truncate">—</p>
+                <p id="set-handle" class="text-[11px] text-gray-500 truncate">—</p>
+                <p id="set-email" class="text-[10px] text-gray-400 truncate mt-0.5">—</p>
+              </div>
+              <button onclick="openSubSettings('account')" class="px-3 py-1.5 rounded-xl bg-brand-600 text-white text-[11px] font-bold">Edit</button>
+            </div>
+          </div>
+
+          <!-- Section: Account -->
+          <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <p class="text-[10px] font-black text-gray-400 tracking-wider px-4 pt-3 pb-1">ACCOUNT</p>
+            <button onclick="openSubSettings('account')" class="set-row w-full">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-brand-500/10 text-brand-500"><i class="fa-solid fa-user"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Personal Information</p>
+                  <p class="text-[11px] text-gray-500">Name, username, bio, avatar</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+            <button onclick="openSubSettings('security')" class="set-row w-full border-t border-gray-100 dark:border-gray-800">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-emerald-500/10 text-emerald-500"><i class="fa-solid fa-shield-halved"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Privacy & Security</p>
+                  <p class="text-[11px] text-gray-500">Password, 2FA, recovery email</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+            <button onclick="openSubSettings('blocked')" class="set-row w-full border-t border-gray-100 dark:border-gray-800">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-red-500/10 text-red-500"><i class="fa-solid fa-ban"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Blocked Contacts</p>
+                  <p class="text-[11px] text-gray-500">Manage blocked users</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+          </div>
+
+          <!-- Section: App -->
+          <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <p class="text-[10px] font-black text-gray-400 tracking-wider px-4 pt-3 pb-1">APP PREFERENCES</p>
+            <button onclick="openSubSettings('appearance')" class="set-row w-full">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-purple-500/10 text-purple-500"><i class="fa-solid fa-palette"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Appearance</p>
+                  <p class="text-[11px] text-gray-500">Theme, chat wallpaper</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="set-theme-badge" class="text-[11px] font-bold text-gray-500">Dark</span>
+                <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+              </div>
+            </button>
+            <button onclick="openSubSettings('notifications')" class="set-row w-full border-t border-gray-100 dark:border-gray-800">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-amber-500/10 text-amber-500"><i class="fa-solid fa-bell"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Notifications</p>
+                  <p class="text-[11px] text-gray-500">Sounds, message previews</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+            <button onclick="openSubSettings('chats')" class="set-row w-full border-t border-gray-100 dark:border-gray-800">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-blue-500/10 text-blue-500"><i class="fa-solid fa-comments"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Chats</p>
+                  <p class="text-[11px] text-gray-500">Auto-reply, media download</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+            <button onclick="openSubSettings('ai')" class="set-row w-full border-t border-gray-100 dark:border-gray-800">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-gradient-to-br from-purple-500 to-indigo-500 text-white"><i class="fa-solid fa-robot"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Boi AchiverAI</p>
+                  <p class="text-[11px] text-gray-500">Assistant preferences</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+          </div>
+
+          <!-- Section: Data -->
+          <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <p class="text-[10px] font-black text-gray-400 tracking-wider px-4 pt-3 pb-1">DATA & STORAGE</p>
+            <button onclick="openSubSettings('storage')" class="set-row w-full">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-gray-500/10 text-gray-500"><i class="fa-solid fa-database"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Storage & Data</p>
+                  <p class="text-[11px] text-gray-500">Usage, export, clear cache</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+            <button onclick="openSubSettings('about')" class="set-row w-full border-t border-gray-100 dark:border-gray-800">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-cyan-500/10 text-cyan-500"><i class="fa-solid fa-circle-info"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">About & Help</p>
+                  <p class="text-[11px] text-gray-500">Version, terms, support</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+          </div>
+
+          <!-- Section: Danger zone -->
+          <div class="bg-white dark:bg-gray-900 rounded-2xl border border-red-200 dark:border-red-900/40 overflow-hidden">
+            <p class="text-[10px] font-black text-red-500 tracking-wider px-4 pt-3 pb-1">DANGER ZONE</p>
+            <button onclick="confirmLogout()" class="set-row w-full">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-gray-500/10 text-gray-500"><i class="fa-solid fa-right-from-bracket"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm">Sign Out</p>
+                  <p class="text-[11px] text-gray-500">Log out of this device</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+            </button>
+            <button onclick="openDeleteAccount()" class="set-row w-full border-t border-red-100 dark:border-red-900/30">
+              <div class="flex items-center gap-3">
+                <div class="set-ico bg-red-500/10 text-red-500"><i class="fa-solid fa-trash"></i></div>
+                <div class="text-left">
+                  <p class="font-bold text-sm text-red-500">Delete Account</p>
+                  <p class="text-[11px] text-gray-500">Permanently erase account & all data</p>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-red-400 text-xs"></i>
+            </button>
+          </div>
+
+          <p class="text-center text-[11px] text-gray-400 pt-2">SocialfreeText v3.1 · Made by Boi Achiver</p>
+        </div>
+
+        <!-- SUB PANELS -->
+        <div id="settings-sub" class="hidden space-y-3"></div>
+      </section>
+
+      <!-- ═══ SEARCH ═══ -->
+      <section id="v-search" class="view hidden max-w-2xl mx-auto p-3 space-y-3">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+          <input id="search-q" oninput="renderSearch()" type="text" placeholder="Search users, chats, groups…" autofocus class="w-full pl-10 pr-4 py-3 rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+        </div>
+        <div id="search-results" class="space-y-2"></div>
+      </section>
+
+      <!-- ═══ ADMIN ═══ -->
+      <section id="v-admin" class="view hidden max-w-4xl mx-auto p-3 space-y-4">
+        <div class="bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 p-5 rounded-2xl text-gray-950 shadow-xl shadow-amber-500/20 flex justify-between items-center gap-3">
+          <div>
+            <span class="bg-black/20 text-[10px] font-black uppercase px-2.5 py-1 rounded-full tracking-wider">BOI PRIVILEGE MODE</span>
+            <h1 class="text-xl sm:text-2xl font-black mt-1.5">Super Admin Dashboard</h1>
+            <p class="text-[11px] font-semibold opacity-80 mt-0.5">Full control: users, moderation, AI, system</p>
+          </div>
+          <i class="fa-solid fa-crown text-4xl opacity-80"></i>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-200 dark:border-gray-800">
+            <p class="text-[10px] font-black text-gray-400 tracking-wider">USERS</p>
+            <p class="text-xl font-black mt-1" id="ad-users">0</p>
+          </div>
+          <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-200 dark:border-gray-800">
+            <p class="text-[10px] font-black text-gray-400 tracking-wider">MESSAGES</p>
+            <p class="text-xl font-black mt-1" id="ad-msgs">0</p>
+          </div>
+          <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-200 dark:border-gray-800">
+            <p class="text-[10px] font-black text-gray-400 tracking-wider">AI REQUESTS</p>
+            <p class="text-xl font-black mt-1" id="ad-ai">0</p>
+          </div>
+          <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-200 dark:border-gray-800">
+            <p class="text-[10px] font-black text-gray-400 tracking-wider">FLAGGED</p>
+            <p class="text-xl font-black mt-1 text-red-500" id="ad-flag">0</p>
+          </div>
+        </div>
+
+        <div class="flex gap-2 overflow-x-auto no-sb">
+          <button onclick="adminTab('users')" data-atab="users" class="atab px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 text-gray-950 whitespace-nowrap">Users</button>
+          <button onclick="adminTab('flags')" data-atab="flags" class="atab px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-500 whitespace-nowrap">Moderation</button>
+          <button onclick="adminTab('broadcast')" data-atab="broadcast" class="atab px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-500 whitespace-nowrap">Broadcast</button>
+          <button onclick="adminTab('logs')" data-atab="logs" class="atab px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-500 whitespace-nowrap">Logs</button>
+        </div>
+
+        <div id="ad-users-view" class="asub bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div class="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2">
+            <input id="ad-user-q" oninput="renderAdminUsers()" placeholder="Search users..." class="flex-1 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500">
+          </div>
+          <div id="ad-user-table" class="divide-y divide-gray-100 dark:divide-gray-800"></div>
+        </div>
+
+        <div id="ad-flags-view" class="asub hidden bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div id="ad-flag-list" class="divide-y divide-gray-100 dark:divide-gray-800"></div>
+        </div>
+
+        <div id="ad-broadcast-view" class="asub hidden bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
+          <h3 class="font-bold text-sm">Send Broadcast</h3>
+          <textarea id="ad-bcast" rows="3" placeholder="Announcement to all users..." class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"></textarea>
+          <button onclick="sendBroadcast()" class="w-full py-2.5 bg-amber-500 hover:brightness-110 text-gray-950 font-bold text-sm rounded-xl">
+            <i class="fa-solid fa-bullhorn mr-1.5"></i> Send to All Users
+          </button>
+        </div>
+
+        <div id="ad-logs-view" class="asub hidden bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div id="ad-logs" class="p-3 space-y-1 font-mono text-[10px] text-gray-500 max-h-96 overflow-y-auto sb"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="md:hidden fixed bottom-0 inset-x-0 h-16 safe-b glass border-t border-gray-200 dark:border-gray-800 flex items-center justify-around z-40">
+    <button onclick="go('chats')" data-bnav="chats" class="bn flex flex-col items-center gap-0.5 w-16 text-gray-400"><i class="fa-solid fa-comment-dots text-lg"></i><span class="text-[9px] font-bold">Chats</span></button>
+    <button onclick="go('status')" data-bnav="status" class="bn flex flex-col items-center gap-0.5 w-16 text-gray-400"><i class="fa-solid fa-circle-notch text-lg"></i><span class="text-[9px] font-bold">Status</span></button>
+    <button onclick="go('calls')" data-bnav="calls" class="bn flex flex-col items-center gap-0.5 w-16 text-gray-400"><i class="fa-solid fa-phone text-lg"></i><span class="text-[9px] font-bold">Calls</span></button>
+    <button onclick="go('ai')" data-bnav="ai" class="bn flex flex-col items-center gap-0.5 w-16 text-gray-400"><i class="fa-solid fa-robot text-lg"></i><span class="text-[9px] font-bold">AI</span></button>
+    <button onclick="go('profile')" data-bnav="profile" class="bn flex flex-col items-center gap-0.5 w-16 text-gray-400"><i class="fa-solid fa-user text-lg"></i><span class="text-[9px] font-bold">Me</span></button>
+  </nav>
+</div>
+
+<!-- ══════════ CALL OVERLAY ══════════ -->
+<div id="call-scr" class="fixed inset-0 z-[180] bg-gray-950 hidden flex-col">
+  <div class="flex-1 relative flex flex-col items-center justify-center p-6 text-white">
+    <div id="call-vid" class="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-950 hidden items-center justify-center">
+      <div class="text-center">
+        <i class="fa-solid fa-video text-6xl text-brand-500 animate-pulse"></i>
+        <p class="text-sm text-gray-400 mt-3">Video stream active</p>
+      </div>
+    </div>
+    <div class="relative text-center z-10">
+      <div class="w-32 h-32 rounded-full bg-brand-600/25 border-4 border-brand-500 flex items-center justify-center mx-auto mb-5 pulse-ring">
+        <img id="call-av" class="w-28 h-28 rounded-full object-cover" src="">
+      </div>
+      <h2 id="call-name" class="text-2xl font-black">—</h2>
+      <p id="call-sub" class="text-sm text-gray-400 mt-1">Calling…</p>
+      <p id="call-tmr" class="text-xs text-brand-400 mt-2 font-mono hidden">00:00</p>
+    </div>
+  </div>
+  <div class="p-6 pb-10 flex items-center justify-center gap-4 safe-b">
+    <button id="call-mute" onclick="callToggle('mute')" class="w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center"><i class="fa-solid fa-microphone"></i></button>
+    <button id="call-spk" onclick="callToggle('spk')" class="w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center"><i class="fa-solid fa-volume-high"></i></button>
+    <button id="call-cam" onclick="callToggle('cam')" class="w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center hidden"><i class="fa-solid fa-video"></i></button>
+    <button onclick="endCall()" class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white text-xl flex items-center justify-center shadow-lg shadow-red-600/40"><i class="fa-solid fa-phone-slash"></i></button>
+  </div>
+</div>
+
+<!-- ══════════ STORY VIEWER ══════════ -->
+<div id="story-scr" class="fixed inset-0 z-[180] bg-black hidden flex-col">
+  <div class="p-3 flex gap-1" id="story-progs"></div>
+  <div class="px-3 flex items-center gap-3 text-white">
+    <img id="story-av" class="w-9 h-9 rounded-full object-cover" src="">
+    <div class="flex-1 min-w-0">
+      <p id="story-name" class="font-bold text-sm truncate"></p>
+      <p id="story-time" class="text-[10px] text-gray-400"></p>
+    </div>
+    <button onclick="closeStory()" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+  <div class="flex-1 relative flex items-center justify-center p-3">
+    <button onclick="prevStory()" class="absolute left-1 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center z-10"><i class="fa-solid fa-chevron-left"></i></button>
+    <div id="story-content" class="max-w-full max-h-full rounded-2xl overflow-hidden"></div>
+    <button onclick="nextStory()" class="absolute right-1 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center z-10"><i class="fa-solid fa-chevron-right"></i></button>
+    <div id="story-reactions" class="absolute bottom-6 left-0 right-0 flex justify-center gap-2 text-2xl">
+      <button onclick="reactStory('❤️')" class="hover:scale-125 transition">❤️</button>
+      <button onclick="reactStory('😂')" class="hover:scale-125 transition">😂</button>
+      <button onclick="reactStory('😮')" class="hover:scale-125 transition">😮</button>
+      <button onclick="reactStory('🔥')" class="hover:scale-125 transition">🔥</button>
+      <button onclick="reactStory('👏')" class="hover:scale-125 transition">👏</button>
+    </div>
+    <div id="story-views" class="absolute top-4 right-4 bg-black/60 backdrop-blur text-white text-[11px] font-bold px-3 py-1.5 rounded-full"></div>
+  </div>
+</div>
+
+<!-- ══════════ VOICE RECORDING ══════════ -->
+<div id="rec-bar" class="fixed bottom-20 left-0 right-0 z-[150] hidden">
+  <div class="mx-4 max-w-md md:mx-auto bg-red-600 text-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-2xl slide-up">
+    <span class="w-2.5 h-2.5 rounded-full bg-white recording"></span>
+    <span class="text-xs font-bold">Recording…</span>
+    <span id="rec-time" class="text-xs font-mono">00:00</span>
+    <button onclick="cancelVoice()" class="ml-auto text-xs font-bold opacity-80">Cancel</button>
+    <button onclick="stopVoice()" class="w-9 h-9 rounded-full bg-white text-red-600 flex items-center justify-center"><i class="fa-solid fa-paper-plane text-sm"></i></button>
+  </div>
+</div>
+
+<!-- ══════════ DELETE ACCOUNT MODAL ══════════ -->
+<div id="delete-modal" class="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div class="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-5 fade-up border border-red-200 dark:border-red-900/40">
+    <div class="text-center mb-4">
+      <div class="w-14 h-14 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-3 text-2xl">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h2 class="text-lg font-black text-red-500">Delete Account?</h2>
+      <p class="text-[11px] text-gray-500 mt-1">This action is <b>permanent and irreversible</b>. All your chats, statuses, groups, and profile data will be erased forever.</p>
+    </div>
+    <div class="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 mb-4">
+      <p class="text-[11px] text-red-600 dark:text-red-400 font-semibold text-center">
+        Type <b class="font-mono">DELETE</b> below to confirm
+      </p>
+    </div>
+    <input id="del-confirm" type="text" placeholder="Type DELETE" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm text-center font-mono font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-red-500 mb-3">
+    <div class="flex gap-2">
+      <button onclick="closeModal('delete-modal')" class="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm font-bold">Cancel</button>
+      <button id="del-btn" onclick="deleteAccount()" disabled class="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">Delete Forever</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ CHANGE PASSWORD MODAL ══════════ -->
+<div id="pw-modal" class="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div class="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-5 fade-up">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="font-black text-base">Change Password</h2>
+      <button onclick="closeModal('pw-modal')" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form onsubmit="changePassword(event)" class="space-y-3">
+      <input id="pw-old" type="password" required placeholder="Current password" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+      <input id="pw-new" type="password" required placeholder="New password (min 6)" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+      <input id="pw-new2" type="password" required placeholder="Confirm new password" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+      <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm">Update Password</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════ TOASTS ══════════ -->
+<div id="toasts" class="fixed bottom-24 md:bottom-6 right-3 left-3 md:left-auto z-[200] space-y-2 md:max-w-sm"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   SocialfreeText v3.1 — Full featured
+   ══════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const uid = () => Math.random().toString(36).slice(2,10);
+const now = () => Date.now();
+const fTime = (t) => {
+  if (!t) return '';
+  const d = new Date(t), diff = (Date.now() - d.getTime())/1000;
+  if (diff < 60) return 'now';
+  if (diff < 3600) return Math.floor(diff/60)+'m';
+  if (diff < 86400) return Math.floor(diff/3600)+'h';
+  if (diff < 604800) return Math.floor(diff/86400)+'d';
+  return d.toLocaleDateString();
+};
+const IMG_POOL = [
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
+  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80',
+  'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200&q=80',
+  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&q=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80'
+];
+const STOCK_MEDIA = [
+  'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=900&q=80',
+  'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=900&q=80',
+  'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900&q=80',
+  'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&q=80',
+  'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=900&q=80'
+];
+
+/* ── Seed state ── */
+function seed() {
+  const admin = {
+    id: 'u_admin', name: 'Boi Achiver', username: 'boiachiver',
+    email: 'admin@socialfreetext.com', password: 'admin123',
+    avatar: IMG_POOL[0], bio: 'Creator of SocialfreeText. Building the future of social. ⚡',
+    role: 'Super Admin', status: 'active', verified: true,
+    followers: 124800, following: 312,
+    recoveryEmail: '', blocked: [], twoFA: false,
+    joinedAt: now() - 86400000*400
+  };
+  const users = [
+    admin,
+    { id:'u1', name:'Alexander Wright', username:'alexw', email:'alex@demo.com', password:'demo123', avatar:IMG_POOL[1], bio:'Product designer.', role:'User', status:'active', verified:true, followers:45200, following:890, blocked:[], twoFA:false, joinedAt:now()-86400000*200 },
+    { id:'u2', name:'Elena Rostova', username:'elenar', email:'elena@demo.com', password:'demo123', avatar:IMG_POOL[2], bio:'AI researcher.', role:'User', status:'active', verified:true, followers:78400, following:512, blocked:[], twoFA:false, joinedAt:now()-86400000*300 },
+    { id:'u3', name:'Marcus Vance', username:'marcusv', email:'marcus@demo.com', password:'demo123', avatar:IMG_POOL[3], bio:'Full-stack dev.', role:'User', status:'active', verified:false, followers:12400, following:340, blocked:[], twoFA:false, joinedAt:now()-86400000*150 },
+    { id:'u4', name:'Sofia Lindgren', username:'sofial', email:'sofia@demo.com', password:'demo123', avatar:IMG_POOL[4], bio:'Photographer.', role:'User', status:'active', verified:false, followers:32100, following:220, blocked:[], twoFA:false, joinedAt:now()-86400000*180 },
+    { id:'u5', name:'Daniel Okafor', username:'danok', email:'daniel@demo.com', password:'demo123', avatar:IMG_POOL[5], bio:'Founder.', role:'User', status:'active', verified:true, followers:8900, following:410, blocked:[], twoFA:false, joinedAt:now()-86400000*90 }
+  ];
+  const chats = [
+    { id:'c1', type:'dm', userId:'u1', lastMsg:'Are we good for the WebRTC test?', lastTime:now()-60000*2, unread:2 },
+    { id:'c2', type:'dm', userId:'u2', lastMsg:'The new UI design looks fantastic!', lastTime:now()-60000*18, unread:1 },
+    { id:'c3', type:'dm', userId:'u3', lastMsg:'Shipped the admin dashboard 🎉', lastTime:now()-3600000, unread:0 },
+    { id:'c4', type:'dm', userId:'u4', lastMsg:'Sent you the mockups.', lastTime:now()-3600000*3, unread:0 },
+    { id:'g1', type:'group', name:'Achivers Team', avatar:IMG_POOL[3], memberIds:['u_admin','u1','u2','u3'], admins:['u_admin'], lastMsg:'Alex: Let\'s ship it', lastTime:now()-60000*5, unread:3, createdBy:'u_admin' }
+  ];
+  const messages = {
+    c1:[{id:'m1',from:'u1',type:'text',text:'Hey! Testing out the new features.',at:now()-60000*10},{id:'m2',from:'u_admin',type:'text',text:'Everything works perfectly.',at:now()-60000*8,read:true},{id:'m3',from:'u1',type:'text',text:'Are we good for the WebRTC test?',at:now()-60000*2}],
+    c2:[{id:'m4',from:'u2',type:'text',text:'The new UI design looks fantastic!',at:now()-60000*18}],
+    c3:[{id:'m5',from:'u3',type:'text',text:'Shipped the admin dashboard 🎉',at:now()-3600000}],
+    c4:[{id:'m6',from:'u4',type:'image',text:STOCK_MEDIA[2],at:now()-3600000*3}],
+    g1:[{id:'m7',from:'u1',type:'text',text:'Kickoff in 5!',at:now()-60000*20},{id:'m8',from:'u2',type:'text',text:'Ready 🚀',at:now()-60000*15},{id:'m9',from:'u1',type:'text',text:'Let\'s ship it',at:now()-60000*5}]
+  };
+  const statuses = [
+    {id:'s1',userId:'u1',type:'photo',media:STOCK_MEDIA[0],caption:'Morning hike ⛰️',music:'',bg:'',at:now()-60000*20,viewers:['u2','u3'],reactions:{'❤️':2}},
+    {id:'s2',userId:'u2',type:'text',text:'Deep work mode 🧠',bg:'bg-gradient-to-br from-indigo-500 to-purple-600',caption:'',music:'',at:now()-3600000,viewers:['u1'],reactions:{'👏':3}},
+    {id:'s3',userId:'u3',type:'photo',media:STOCK_MEDIA[1],caption:'Shipping day 🚀',music:'Lo-Fi Beats',bg:'',at:now()-3600000*3,viewers:[],reactions:{}}
+  ];
+  const calls = [
+    {id:'cl1',userId:'u1',kind:'video',direction:'out',duration:145,at:now()-3600000*2,missed:false},
+    {id:'cl2',userId:'u2',kind:'audio',direction:'in',duration:320,at:now()-3600000*5,missed:false},
+    {id:'cl3',userId:'u3',kind:'audio',direction:'in',duration:0,at:now()-86400000,missed:true}
+  ];
+  const communities = [
+    {id:'co1',name:'Tech Enthusiasts',desc:'Latest in tech, AI and startups.',emoji:'💻',members:12400,channels:[{id:'ch1',name:'general',posts:234},{id:'ch2',name:'announcements',posts:45}],createdBy:'u_admin',admins:['u_admin']},
+    {id:'co2',name:'Web3 Builders',desc:'Crypto, DeFi and dApps.',emoji:'🔗',members:8100,channels:[{id:'ch4',name:'general',posts:156}],createdBy:'u_admin',admins:['u_admin']}
+  ];
+  const notifications = [
+    {id:'n1',icon:'fa-heart',color:'text-red-500',text:'<b>Elena Rostova</b> liked your status.',at:now()-60000*2,read:false},
+    {id:'n2',icon:'fa-comment',color:'text-brand-500',text:'<b>Marcus Vance</b> replied to your message.',at:now()-3600000,read:false},
+    {id:'n3',icon:'fa-phone',color:'text-emerald-500',text:'Missed call from <b>Marcus Vance</b>.',at:now()-86400000,read:true}
+  ];
+  const flags = [
+    {id:'fl1',type:'Message',preview:'"Buy cheap crypto now…"',by:'u3',severity:'high'},
+    {id:'fl2',type:'Status',preview:'Suspicious link detected',by:'auto-filter',severity:'medium'}
+  ];
+  const logs = [
+    '[boot] SocialfreeText v3.1 initialised',
+    '[auth] Session created for boiachiver',
+    '[ai] Boi AchiverAI ready — local reasoning mode',
+    '[sync] Local storage engine online',
+    '[net] No backend — fully offline capable'
+  ];
+  return {
+    theme:'dark', currentUserId:null, users, chats, messages, statuses, calls,
+    communities, notifications, flags, logs, joinedCommunities:['co1'],
+    aiHistory:[], settings:{ sounds:true, autoReply:true, theme:'dark', mediaAuto:false, aiSuggest:true },
+    aiRequests:0
+  };
+}
+
+let S = loadState();
+function loadState() {
+  try {
+    const raw = localStorage.getItem('sft_v3');
+    if (!raw) return seed();
+    return JSON.parse(raw);
+  } catch { return seed(); }
+}
+function saveState() {
+  try { localStorage.setItem('sft_v3', JSON.stringify(S)); } catch {}
+}
+// Remove legacy prototype passwords from browser storage immediately. Authentication is handled
+// by Supabase Auth; local demo passwords must never be retained or accepted.
+if (Array.isArray(S.users)) S.users.forEach(user => { if (user && Object.prototype.hasOwnProperty.call(user, 'password')) delete user.password; });
+S.currentUserId = null;
+saveState();
+const me = () => S.users.find(u => u.id === S.currentUserId);
+const userById = id => S.users.find(u => u.id === id);
+const chatById = id => S.chats.find(c => c.id === id);
+const chatTitle = c => c.type === 'group' ? c.name : (userById(c.userId)?.name || 'Unknown');
+const chatAvatar = c => c.type === 'group' ? c.avatar : (userById(c.userId)?.avatar || '');
+
+/* ── Theme ── */
+function applyTheme() {
+  const dark = S.theme === 'dark';
+  document.documentElement.classList.toggle('dark', dark);
+  const ico = $('theme-ico');
+  if (ico) ico.className = dark ? 'fa-solid fa-sun text-amber-400' : 'fa-solid fa-moon';
+  const badge = $('set-theme-badge');
+  if (badge) badge.textContent = dark ? 'Dark' : 'Light';
+}
+function toggleTheme() { S.theme = S.theme === 'dark' ? 'light' : 'dark'; applyTheme(); saveState(); }
+
+/* ── Toast ── */
+function toast(msg, type='info') {
+  const m = { info:['fa-circle-info','bg-gray-900 dark:bg-gray-800'], success:['fa-circle-check','bg-emerald-600'], error:['fa-circle-exclamation','bg-red-600'], ai:['fa-robot','bg-purple-600'] };
+  const [i,c] = m[type] || m.info;
+  const el = document.createElement('div');
+  el.className = `${c} text-white px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold flex items-center gap-3 slide-in`;
+  el.innerHTML = `<i class="fa-solid ${i}"></i><span class="flex-1">${msg}</span>`;
+  $('toasts').appendChild(el);
+  setTimeout(() => { el.style.transition='opacity .3s,transform .3s'; el.style.opacity='0'; el.style.transform='translateX(20px)'; setTimeout(()=>el.remove(),300); }, 2600);
+}
+
+/* ══════════ AUTH ══════════ */
+function showAuth(view) {
+  document.querySelectorAll('#auth-screen form').forEach(f => f.classList.add('hidden'));
+  if (view === 'signup') $('form-signup').classList.remove('hidden');
+  else if (view === 'recovery') $('form-recovery').classList.remove('hidden');
+  else $('form-login').classList.remove('hidden');
+  const sub = $('auth-sub');
+  if (sub) sub.textContent = view === 'signup' ? 'Create your free account' : view === 'recovery' ? 'Recover your account' : 'Sign in to continue';
+}
+// Supabase browser configuration. Replace these placeholders with your project's URL and
+// publishable (or legacy anon) key. Never use a secret/service_role key in browser code.
+const SUPABASE_URL = 'https://drkmoldcmvsjgmzgevxv.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_IK-tzhu6mbASQLfS1thuKQ_V2XBneYq';
+let supabaseClient = null;
+function getSupabase() {
+  if (SUPABASE_URL.includes('YOUR_PROJECT_ID') || SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')) {
+    throw new Error('Supabase is not configured yet. Add your Project URL and publishable key in Index.html after creating your Supabase project.');
+  }
+  if (!window.supabase?.createClient) throw new Error('Supabase client did not load. Check your internet connection and reload.');
+  if (!supabaseClient) supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+  return supabaseClient;
+}
+function authErrorMessage(error) {
+  const message = String(error?.message || 'Authentication failed.');
+  if (/invalid login credentials/i.test(message)) return 'Email or password is incorrect.';
+  if (/email not confirmed/i.test(message)) return 'Please confirm your email using the link we sent you.';
+  if (/user already registered/i.test(message)) return 'An account with this email already exists.';
+  return message;
+}
+async function loadAuthenticatedProfile(authUser) {
+  const client = getSupabase();
+  let { data: profile, error } = await client.from('profiles')
+    .select('id, username, display_name, avatar_url, bio, created_at')
+    .eq('id', authUser.id).maybeSingle();
+  if (error) throw error;
+  // The SQL trigger creates this profile. Retry briefly in case the trigger's row is not
+  // immediately visible to the first read.
+  if (!profile) {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    ({ data: profile, error } = await client.from('profiles')
+      .select('id, username, display_name, avatar_url, bio, created_at')
+      .eq('id', authUser.id).maybeSingle());
+    if (error) throw error;
+  }
+  if (!profile) throw new Error('Your account exists, but its profile was not created. Apply supabase/schema.sql in the Supabase SQL Editor.');
+  const email = authUser.email || '';
+  const username = profile.username || email.split('@')[0] || 'user';
+  const user = {
+    id: authUser.id, name: profile.display_name || username, username, email,
+    bio: profile.bio || '', avatar: profile.avatar_url || IMG_POOL[0],
+    role: 'User', status: 'active', verified: Boolean(authUser.email_confirmed_at),
+    followers: 0, following: 0, recoveryEmail: '', blocked: [], twoFA: false,
+    joinedAt: profile.created_at || authUser.created_at
+  };
+  // Keep the existing UI running, but do not persist passwords or tokens in S/localStorage.
+  S.users = S.users.filter(item => item.id !== user.id);
+  // Do not retain prototype passwords for any local/demo user.
+  S.users.forEach(item => { if (Object.prototype.hasOwnProperty.call(item, 'password')) delete item.password; });
+  S.users.push(user);
+  S.currentUserId = user.id;
+  return user;
+}
+$('form-login').addEventListener('submit', async e => {
+  e.preventDefault();
+  const button = $('form-login').querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Signing in…'; }
+  try {
+    const client = getSupabase();
+    const identifier = $('login-id').value.trim();
+    if (!identifier.includes('@')) {
+      throw new Error('Sign in with the email address for your account. Username sign-in will be available after username lookup is configured.');
+    }
+    const { data, error } = await client.auth.signInWithPassword({ email: identifier, password: $('login-pw').value });
+    if (error) throw error;
+    await loadAuthenticatedProfile(data.user);
+    saveState();
+    enterApp();
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Sign In'; }
+  }
+});
+$('form-signup').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('su-name').value.trim();
+  const username = $('su-user').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+  const email = $('su-email').value.trim().toLowerCase();
+  const pw = $('su-pw').value;
+  const bio = $('su-bio').value.trim();
+  if (username.length < 3 || username.length > 24) return toast('Username must be 3–24 letters, numbers, or underscores.', 'error');
+  if (pw.length < 8) return toast('Use a password of at least 8 characters.', 'error');
+  if (!name || !email) return toast('Enter your name and email address.', 'error');
+  const button = $('form-signup').querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Creating account…'; }
+  try {
+    const client = getSupabase();
+    const { data, error } = await client.auth.signUp({
+      email, password: pw,
+      options: { data: { username, display_name: name.slice(0, 80), bio: bio.slice(0, 300) } }
+    });
+    if (error) throw error;
+    if (data.session && data.user) {
+      await loadAuthenticatedProfile(data.user);
+      saveState();
+      toast('Account created successfully.', 'success');
+      enterApp();
+    } else {
+      toast('Account created. Check your email to confirm it, then sign in.', 'success');
+      showAuth('login');
+    }
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Create Account'; }
+  }
+});
+$('form-recovery').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = $('rc-email').value.trim().toLowerCase();
+  if (!email) return toast('Enter the email address for your account.', 'error');
+  try {
+    const client = getSupabase();
+    const redirectTo = location.origin + location.pathname;
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+    toast('If an account exists for that email, a password reset link will be sent.', 'success');
+    showAuth('login');
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  }
+});
+
+/* ══════════ HIDDEN ADMIN LOGIN ══════════ */
+let brandTaps = 0, brandTapTimer = null;
+const brandLogo = $('brand-logo');
+if (brandLogo) {
+  brandLogo.addEventListener('click', () => {
+    brandTaps++;
+    clearTimeout(brandTapTimer);
+    brandTapTimer = setTimeout(() => brandTaps = 0, 800);
+    if (brandTaps >= 7) {
+      brandTaps = 0;
+      openAdminLogin();
+    }
+  });
+}
+function checkAdminHash() {
+  if (location.hash === '#admin') openAdminLogin();
+}
+function openAdminLogin() {
+  $('auth-screen').classList.add('hidden');
+  $('app').classList.add('hidden');
+  $('admin-login').classList.remove('hidden');
+  $('admin-login').classList.add('flex');
+  $('ad-pw').value = '';
+  $('ad-user').value = '';
+  setTimeout(() => $('ad-user').focus(), 200);
+}
+function closeAdminLogin() {
+  $('admin-login').classList.add('hidden');
+  $('admin-login').classList.remove('flex');
+  if (location.hash === '#admin') history.replaceState(null,'',location.pathname);
+  init();
+}
+function adminLogin(e) {
+  e.preventDefault();
+  const un = $('ad-user').value.trim().toLowerCase();
+  const pw = $('ad-pw').value;
+  const u = S.users.find(x => (x.username.toLowerCase() === un || x.email.toLowerCase() === un) && x.password === pw && (x.role === 'Admin' || x.role === 'Super Admin'));
+  if (!u) return toast('Invalid admin credentials', 'error');
+  S.currentUserId = u.id;
+  S.logs.unshift(`[${new Date().toLocaleTimeString()}] [auth] ADMIN ${u.username} signed in`);
+  saveState();
+  $('admin-login').classList.add('hidden');
+  $('admin-login').classList.remove('flex');
+  if (location.hash === '#admin') history.replaceState(null,'',location.pathname);
+  toast(`Welcome, ${u.name}`, 'success');
+  enterApp();
+}
+
+function enterApp() {
+  $('auth-screen').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  initUI();
+}
+async function logout() {
+  if (!confirm('Sign out of SocialfreeText?')) return;
+  try {
+    const client = getSupabase();
+    const { error } = await client.auth.signOut();
+    if (error) throw error;
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+    return;
+  }
+  S.currentUserId = null;
+  saveState();
+  $('app').classList.add('hidden');
+  $('auth-screen').classList.remove('hidden');
+  showAuth('login');
+  $('login-pw').value = '';
+  toast('Signed out', 'info');
+}
+function confirmLogout() { logout(); }
+
+/* ══════════ NAVIGATION ══════════ */
+function go(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+  const target = $('v-' + view);
+  if (target) target.classList.remove('hidden');
+  document.querySelectorAll('[data-nav]').forEach(n => n.classList.toggle('active', n.dataset.nav === view));
+  document.querySelectorAll('.bn').forEach(n => {
+    const on = n.dataset.bnav === view;
+    n.classList.toggle('text-brand-500', on);
+    n.classList.toggle('text-gray-400', !on);
+  });
+  $('sidebar').classList.add('-translate-x-full');
+  $('sb-overlay').classList.add('hidden');
+  document.querySelector('main').scrollTop = 0;
+  if (view === 'chats') renderChats();
+  if (view === 'status') renderStatusList();
+  if (view === 'calls') renderCalls();
+  if (view === 'groups') renderGroups();
+  if (view === 'communities') renderCommunities();
+  if (view === 'ai') renderAiStream();
+  if (view === 'profile') renderProfile();
+  if (view === 'settings') renderSettingsMain();
+  if (view === 'admin') renderAdmin();
+  if (view === 'search') { $('search-q').value=''; renderSearch(); setTimeout(()=>$('search-q').focus(),100); }
+}
+
+function initUI() {
+  const u = me();
+  $('hdr-avatar').src = u.avatar;
+  $('sb-avatar').src = u.avatar;
+  $('sb-name').textContent = u.name;
+  $('sb-handle').textContent = '@' + u.username;
+  const isAdmin = u.role === 'Admin' || u.role === 'Super Admin';
+  $('nav-admin').classList.toggle('hidden', !isAdmin);
+  renderNotifs();
+  renderChats();
+  go('chats');
+}
+
+/* ══════════ CHATS ══════════ */
+function renderChats() {
+  const q = ($('chat-q')?.value || '').toLowerCase();
+  const list = S.chats.filter(c => {
+    const t = chatTitle(c).toLowerCase();
+    return !q || t.includes(q);
+  }).sort((a,b) => (b.lastTime||0) - (a.lastTime||0));
+  const el = $('chat-items');
+  if (!list.length) { el.innerHTML = `<p class="text-center text-xs text-gray-400 py-8">No chats yet</p>`; }
+  else {
+    el.innerHTML = list.map(c => {
+      const t = chatTitle(c), av = chatAvatar(c), isGroup = c.type === 'group';
+      return `<button onclick="openConv('${c.id}')" class="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 text-left transition">
+        <div class="relative shrink-0">
+          <img src="${esc(av)}" class="w-12 h-12 rounded-full object-cover">
+          ${isGroup ? '<div class="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-brand-600 text-white text-[9px] flex items-center justify-center border-2 border-white dark:border-gray-900"><i class="fa-solid fa-users"></i></div>' : '<span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-gray-900"></span>'}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-2">
+            <p class="font-bold text-sm truncate">${esc(t)}</p>
+            <span class="text-[10px] text-gray-400 shrink-0">${fTime(c.lastTime)}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <p class="text-xs text-gray-500 truncate flex-1">${esc(c.lastMsg||'')}</p>
+            ${c.unread ? `<span class="shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-brand-500 text-white text-[10px] font-bold flex items-center justify-center">${c.unread}</span>` : ''}
+          </div>
+        </div>
+      </button>`;
+    }).join('');
+  }
+  const unread = S.chats.reduce((a,c)=>a+(c.unread||0),0);
+  const sbB = $('sb-chat-badge');
+  if (sbB) { sbB.textContent = unread; sbB.classList.toggle('hidden', !unread); }
+}
+
+let activeChat = null;
+function openConv(id) {
+  activeChat = id;
+  const c = chatById(id);
+  if (!c) return;
+  c.unread = 0; saveState(); renderChats();
+  $('conv-empty').classList.add('hidden');
+  // On small screens, switch from the conversation list to the active thread.
+  const list = $('chat-list');
+  list.classList.add('hidden');
+  list.classList.add('md:flex');
+  const convPane = $('conv-pane');
+  convPane.classList.remove('hidden');
+  convPane.classList.add('flex');
+  const pane = $('conv-active');
+  pane.classList.remove('hidden');
+  pane.classList.add('flex');
+  const t = chatTitle(c), av = chatAvatar(c);
+  const sub = c.type === 'group' ? (c.memberIds?.length||0)+' members' : 'Online';
+  pane.innerHTML = `
+    <div class="p-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center gap-3">
+      <button onclick="closeConv()" class="md:hidden w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"><i class="fa-solid fa-arrow-left"></i></button>
+      <img src="${esc(av)}" class="w-10 h-10 rounded-full object-cover">
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-sm truncate">${esc(t)}</p>
+        <p class="text-[11px] text-emerald-500 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> ${esc(sub)}</p>
+      </div>
+      <button onclick="startCall('audio')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-phone"></i></button>
+      <button onclick="startCall('video')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-video"></i></button>
+    </div>
+    <div id="msgs" class="flex-1 overflow-y-auto sb p-3 space-y-2" style="background-image:radial-gradient(circle at 1px 1px, rgba(156,163,175,.08) 1px, transparent 0); background-size:16px 16px;"></div>
+    <div class="p-2 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+      <div class="flex items-end gap-1.5">
+        <button onclick="openEmoji()" class="w-10 h-10 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center shrink-0"><i class="fa-regular fa-face-smile"></i></button>
+        <button onclick="attachMenu()" class="w-10 h-10 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center shrink-0"><i class="fa-solid fa-paperclip"></i></button>
+        <div class="flex-1 bg-gray-100 dark:bg-gray-800 rounded-3xl flex items-end px-3 py-1.5 min-h-[42px]">
+          <textarea id="msg-in" rows="1" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}" placeholder="Message" class="flex-1 bg-transparent text-sm resize-none outline-none max-h-32 py-1.5 no-sb"></textarea>
+        </div>
+        <button onclick="startVoice()" id="mic-btn" class="w-11 h-11 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-brand-600/25"><i class="fa-solid fa-microphone"></i></button>
+        <button onclick="sendMsg()" id="send-btn" class="w-11 h-11 rounded-full bg-brand-600 text-white items-center justify-center shrink-0 shadow-lg shadow-brand-600/25 hidden"><i class="fa-solid fa-paper-plane text-sm"></i></button>
+      </div>
+    </div>`;
+  renderMsgs();
+}
+function closeConv() {
+  activeChat = null;
+  $('conv-empty').classList.remove('hidden');
+  const pane = $('conv-active');
+  pane.classList.add('hidden'); pane.classList.remove('flex'); pane.innerHTML = '';
+  // Return to the chat list on mobile; keep the split-pane layout on desktop.
+  const list = $('chat-list');
+  list.classList.remove('hidden');
+  const convPane = $('conv-pane');
+  convPane.classList.add('hidden');
+  convPane.classList.remove('flex');
+}
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+  const hasText = el.value.trim().length > 0;
+  $('mic-btn').classList.toggle('hidden', hasText);
+  $('send-btn').classList.toggle('hidden', !hasText);
+  $('send-btn').classList.toggle('flex', hasText);
+}
+function renderMsgs() {
+  const box = $('msgs');
+  if (!box || !activeChat) return;
+  const msgs = S.messages[activeChat] || [];
+  const c = chatById(activeChat);
+  box.innerHTML = msgs.map((m, i) => {
+    const mine = m.from === S.currentUserId;
+    const u = userById(m.from) || { name:'Unknown', avatar:'' };
+    const showName = c?.type === 'group' && !mine;
+    const prev = msgs[i-1];
+    const showAv = !mine && (!prev || prev.from !== m.from);
+    const time = new Date(m.at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    let content = '';
+    if (m.type === 'text') content = `<p class="whitespace-pre-wrap break-words">${esc(m.text)}</p>`;
+    else if (m.type === 'image') content = `<img src="${esc(m.text)}" class="rounded-xl max-w-full max-h-64 object-cover cursor-pointer" onclick="viewImage('${esc(m.text)}')">`;
+    else if (m.type === 'file') content = `<a href="${esc(m.text)}" target="_blank" class="flex items-center gap-2 underline"><i class="fa-solid fa-file"></i> ${esc(m.name||'file')}</a>`;
+    else if (m.type === 'voice') {
+      const bars = Array.from({length:24}).map((_,i)=>`<div class="wave-bar" style="height:${6+Math.abs(Math.sin(i*0.7))*14}px"></div>`).join('');
+      content = `<div class="flex items-center gap-2"><i class="fa-solid fa-play text-xs"></i><div class="flex items-center gap-0.5 h-6">${bars}</div><span class="text-[10px] font-mono">${m.dur||'0:03'}</span></div>`;
+    }
+    else if (m.type === 'sticker') content = `<span class="text-5xl">${esc(m.text)}</span>`;
+    return `<div class="flex ${mine?'justify-end':'justify-start'} items-end gap-1.5 fade-up">
+      ${!mine && showAv ? `<img src="${esc(u.avatar)}" class="w-7 h-7 rounded-full object-cover shrink-0">` : (!mine ? '<div class="w-7"></div>' : '')}
+      <div class="max-w-[78%] flex flex-col ${mine?'items-end':'items-start'}">
+        ${showName ? `<p class="text-[10px] font-bold text-brand-500 mb-0.5 px-1">${esc(u.name)}</p>` : ''}
+        <div class="${mine?'bubble-me':'bubble-them'} px-3 py-2 shadow-sm">
+          ${content}
+          <div class="flex items-center gap-1 justify-end mt-0.5 ${m.type==='sticker'?'hidden':''}">
+            <span class="text-[9px] ${mine?'text-white/60':'text-gray-400'} font-mono">${time}</span>
+            ${mine?`<i class="fa-solid ${m.read?'fa-check-double':'fa-check'} text-[9px] ${m.read?'text-emerald-400':'text-white/60'}"></i>`:''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+  if (c && c.type === 'dm') {
+    setTimeout(() => {
+      (S.messages[activeChat]||[]).forEach(m => { if (m.from !== S.currentUserId) m.read = true; });
+      saveState();
+    }, 800);
+  }
+}
+function sendMsg() {
+  const inp = $('msg-in');
+  const text = inp.value.trim();
+  if (!text || !activeChat) return;
+  const msg = { id:'m'+uid(), from:S.currentUserId, type:'text', text, at:now(), read:false };
+  (S.messages[activeChat] = S.messages[activeChat]||[]).push(msg);
+  const c = chatById(activeChat);
+  if (c) { c.lastMsg = (me()?.name?.split(' ')[0]||'You')+': '+text; c.lastTime = now(); }
+  inp.value = ''; inp.style.height = 'auto';
+  $('mic-btn').classList.remove('hidden');
+  $('send-btn').classList.add('hidden'); $('send-btn').classList.remove('flex');
+  saveState(); renderMsgs(); maybeAutoReply();
+}
+function maybeAutoReply() {
+  if (!S.settings.autoReply) return;
+  const c = chatById(activeChat);
+  if (!c || c.type !== 'dm') return;
+  const box = $('msgs');
+  const typing = document.createElement('div');
+  typing.id = 'typing';
+  typing.className = 'flex items-end gap-1.5';
+  typing.innerHTML = `<img src="${esc(userById(c.userId)?.avatar||'')}" class="w-7 h-7 rounded-full object-cover"><div class="bubble-them px-3 py-2.5 flex gap-1 text-gray-400"><span class="tdot"></span><span class="tdot"></span><span class="tdot"></span></div>`;
+  box.appendChild(typing);
+  box.scrollTop = box.scrollHeight;
+  const replies = ['Got it 👍','Sounds good!','Let me check...','Nice!','Okay, sending now','Haha 😂','Perfect','Yeah, absolutely'];
+  setTimeout(() => {
+    typing.remove();
+    const reply = replies[Math.floor(Math.random()*replies.length)];
+    const msg = { id:'m'+uid(), from:c.userId, type:'text', text:reply, at:now() };
+    (S.messages[activeChat] = S.messages[activeChat]||[]).push(msg);
+    c.lastMsg = reply; c.lastTime = now();
+    saveState(); renderMsgs();
+    if (S.settings.sounds) beep();
+  }, 1500 + Math.random()*1500);
+}
+function beep() {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880; g.gain.value = 0.03;
+    o.start(); o.stop(ctx.currentTime + 0.08);
+  } catch {}
+}
+function attachMenu() {
+  const html = `<div class="fixed inset-0 z-[180] bg-black/50 hidden items-end justify-center" id="attach-sheet" onclick="if(event.target===this)this.remove()">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl p-4 grid grid-cols-3 gap-3 slide-up">
+      <button onclick="this.closest('#attach-sheet').remove();attachURL('image')" class="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800">
+        <span class="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-lg"><i class="fa-solid fa-image"></i></span>
+        <span class="text-xs font-bold">Photo</span>
+      </button>
+      <button onclick="this.closest('#attach-sheet').remove();attachURL('file')" class="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800">
+        <span class="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-lg"><i class="fa-solid fa-file"></i></span>
+        <span class="text-xs font-bold">File</span>
+      </button>
+      <button onclick="this.closest('#attach-sheet').remove();startVoice()" class="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800">
+        <span class="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-lg"><i class="fa-solid fa-microphone"></i></span>
+        <span class="text-xs font-bold">Voice</span>
+      </button>
+      <button onclick="this.closest('#attach-sheet').remove();go('ai')" class="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800">
+        <span class="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center text-lg"><i class="fa-solid fa-robot"></i></span>
+        <span class="text-xs font-bold">Ask AI</span>
+      </button>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { $('attach-sheet').classList.remove('hidden'); $('attach-sheet').classList.add('flex'); }, 10);
+}
+function attachURL(kind) {
+  const url = prompt(kind === 'file' ? 'Paste file URL:' : 'Paste image URL:');
+  if (!url || !activeChat) return;
+  const msg = { id:'m'+uid(), from:S.currentUserId, type: kind === 'file' ? 'file' : 'image', text: url, at:now(), name: kind === 'file' ? 'document.pdf' : '' };
+  (S.messages[activeChat] = S.messages[activeChat]||[]).push(msg);
+  const c = chatById(activeChat);
+  if (c) { c.lastMsg = kind === 'file' ? '📄 File' : '📷 Photo'; c.lastTime = now(); }
+  saveState(); renderMsgs(); renderChats();
+}
+function viewImage(url) {
+  document.body.insertAdjacentHTML('beforeend', `<div class="fixed inset-0 z-[200] bg-black flex items-center justify-center" onclick="this.remove()">
+    <button class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+    <img src="${esc(url)}" class="max-w-full max-h-full object-contain">
+  </div>`);
+}
+
+/* ── Voice notes ── */
+let recTimer = null, recStart = 0;
+function startVoice() {
+  if (!navigator.mediaDevices?.getUserMedia) { simulateVoice(); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    const rec = new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = () => {
+      const dur = Math.floor((Date.now() - recStart)/1000);
+      const msg = { id:'m'+uid(), from:S.currentUserId, type:'voice', text:'', at:now(), dur:`${Math.floor(dur/60)}:${String(dur%60).padStart(2,'0')}` };
+      (S.messages[activeChat] = S.messages[activeChat]||[]).push(msg);
+      const c = chatById(activeChat);
+      if (c) { c.lastMsg = '🎤 Voice message'; c.lastTime = now(); }
+      saveState(); renderMsgs(); renderChats();
+      stream.getTracks().forEach(t => t.stop());
+    };
+    rec.start();
+    recStart = Date.now();
+    window.__rec = rec;
+    showRecBar();
+  }).catch(() => simulateVoice());
+}
+function simulateVoice() {
+  const dur = 3 + Math.floor(Math.random()*7);
+  const msg = { id:'m'+uid(), from:S.currentUserId, type:'voice', text:'', at:now(), dur:`0:${String(dur).padStart(2,'0')}` };
+  (S.messages[activeChat] = S.messages[activeChat]||[]).push(msg);
+  const c = chatById(activeChat);
+  if (c) { c.lastMsg = '🎤 Voice message'; c.lastTime = now(); }
+  saveState(); renderMsgs(); renderChats();
+}
+function showRecBar() {
+  $('rec-bar').classList.remove('hidden');
+  const t = $('rec-time'); t.textContent = '00:00';
+  recTimer = setInterval(() => {
+    const s = Math.floor((Date.now()-recStart)/1000);
+    t.textContent = String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  }, 500);
+}
+function stopVoice() {
+  clearInterval(recTimer);
+  $('rec-bar').classList.add('hidden');
+  if (window.__rec) window.__rec.stop();
+  else toast('Voice sent', 'success');
+}
+function cancelVoice() {
+  clearInterval(recTimer);
+  $('rec-bar').classList.add('hidden');
+  if (window.__rec) { window.__rec.onstop = null; window.__rec.stop(); window.__rec.stream.getTracks().forEach(t=>t.stop()); }
+}
+
+/* ── Emoji ── */
+const EMOJI = '😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😗 😋 😛 😜 🤪 😝 🤑 🤗 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🥵 🥶 🥴 😵 🤯 🤠 🥳 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 💩 🤡 👹 👺 👻 👽 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ✨ ⭐ 🌟 💫 ⚡ 🔥 💥 🎉 🎊 🎁 🎀 🎈 🎂'.split(' ');
+const STICKERS = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🦆','🦅','🦉','🐺','🐴','🦄','🐝','🦋','🐌','🐢','🐍','🦎','🐙','🦑','🦀','🐡','🐠','🐟','🐬','🐳','🦈','🐊','🐅','🦓','🦍','🐘','🦒','🐪','🐫','🐎','🐖','🐑','🦌','🐕','🐈','🐓','🦜','🦢','🕊','🐇'].map(e => e);
+function openEmoji() {
+  const html = `<div class="fixed inset-0 z-[180] bg-black/50 hidden items-end justify-center" id="emoji-sheet" onclick="if(event.target===this)this.remove()">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl slide-up max-h-[60vh] flex flex-col">
+      <div class="flex border-b border-gray-100 dark:border-gray-800">
+        <button onclick="pickTab('emoji')" data-ptab="emoji" class="ptab flex-1 py-3 text-xs font-bold text-brand-500 border-b-2 border-brand-500">Emoji</button>
+        <button onclick="pickTab('sticker')" data-ptab="sticker" class="ptab flex-1 py-3 text-xs font-bold text-gray-400 border-b-2 border-transparent">Stickers</button>
+      </div>
+      <div id="pick-emoji" class="p-3 grid grid-cols-8 gap-1 overflow-y-auto sb"></div>
+      <div id="pick-sticker" class="p-3 grid grid-cols-4 gap-3 overflow-y-auto sb hidden"></div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  $('pick-emoji').innerHTML = EMOJI.map(e => `<button onclick="insertEmoji('${e}')" class="text-2xl p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">${e}</button>`).join('');
+  $('pick-sticker').innerHTML = STICKERS.map(s => `<button onclick="sendSticker('${s}')" class="text-5xl p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800">${s}</button>`).join('');
+  setTimeout(() => { $('emoji-sheet').classList.remove('hidden'); $('emoji-sheet').classList.add('flex'); }, 10);
+}
+function pickTab(t) {
+  document.querySelectorAll('.ptab').forEach(b => {
+    const on = b.dataset.ptab === t;
+    b.className = `ptab flex-1 py-3 text-xs font-bold ${on?'text-brand-500 border-b-2 border-brand-500':'text-gray-400 border-b-2 border-transparent'}`;
+  });
+  $('pick-emoji').classList.toggle('hidden', t !== 'emoji');
+  $('pick-sticker').classList.toggle('hidden', t !== 'sticker');
+}
+function insertEmoji(e) { const inp = $('msg-in'); if (!inp) return; inp.value += e; inp.focus(); autoGrow(inp); }
+function sendSticker(s) {
+  if (!activeChat) return;
+  const msg = { id:'m'+uid(), from:S.currentUserId, type:'sticker', text:s, at:now() };
+  (S.messages[activeChat] = S.messages[activeChat]||[]).push(msg);
+  const c = chatById(activeChat);
+  if (c) { c.lastMsg = s; c.lastTime = now(); }
+  saveState(); renderMsgs(); renderChats();
+  $('emoji-sheet')?.remove();
+}
+
+/* ══════════ CALLS ══════════ */
+let callTimer = null, callSec = 0;
+let callState = { muted: false, spk: false, cam: true };
+function startCall(kind, userId) {
+  if (!userId) {
+    const c = chatById(activeChat);
+    if (c && c.type === 'dm') userId = c.userId;
+    else return toast('Select a user to call', 'info');
+  }
+  const u = userById(userId);
+  if (!u) return;
+  $('call-av').src = u.avatar;
+  $('call-name').textContent = u.name;
+  $('call-sub').textContent = kind === 'video' ? 'Starting video call…' : 'Calling…';
+  $('call-cam').classList.toggle('hidden', kind !== 'video');
+  $('call-vid').classList.toggle('hidden', kind !== 'video');
+  $('call-vid').classList.toggle('flex', kind === 'video');
+  $('call-scr').classList.remove('hidden');
+  $('call-scr').classList.add('flex');
+  callSec = 0; $('call-tmr').classList.add('hidden');
+  callState = { muted: false, spk: false, cam: true };
+  $('call-mute').className = 'w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center';
+  $('call-spk').className = 'w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center';
+  $('call-cam').className = 'w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center';
+  setTimeout(() => {
+    $('call-sub').textContent = 'Connected';
+    $('call-tmr').classList.remove('hidden');
+    callTimer = setInterval(() => {
+      callSec++;
+      const m = String(Math.floor(callSec/60)).padStart(2,'0');
+      const s = String(callSec%60).padStart(2,'0');
+      $('call-tmr').textContent = `${m}:${s}`;
+    }, 1000);
+  }, 1500);
+}
+function callToggle(k) {
+  callState[k] = !callState[k];
+  const btn = $('call-'+k);
+  btn.className = `w-14 h-14 rounded-full ${callState[k]?'bg-white text-gray-900':'bg-gray-800 text-white'} flex items-center justify-center`;
+  if (k === 'mute') btn.innerHTML = `<i class="fa-solid ${callState.muted?'fa-microphone-slash':'fa-microphone'}"></i>`;
+  if (k === 'spk') btn.innerHTML = `<i class="fa-solid ${callState.spk?'fa-volume-high':'fa-volume-low'}"></i>`;
+  if (k === 'cam') btn.innerHTML = `<i class="fa-solid ${callState.cam?'fa-video':'fa-video-slash'}"></i>`;
+}
+function endCall() {
+  clearInterval(callTimer);
+  $('call-scr').classList.add('hidden');
+  $('call-scr').classList.remove('flex');
+  $('call-vid').classList.add('hidden');
+  $('call-vid').classList.remove('flex');
+  if (callSec > 0) {
+    const c = chatById(activeChat);
+    if (c && c.type === 'dm') {
+      S.calls.unshift({ id:'cl'+uid(), userId:c.userId, kind:callState.cam?'video':'audio', direction:'out', duration:callSec, at:now(), missed:false });
+      saveState();
+    }
+    toast(`Call ended · ${Math.floor(callSec/60)}m ${callSec%60}s`, 'info');
+  }
+}
+function renderCalls() {
+  const el = $('call-list');
+  if (!S.calls.length) return el.innerHTML = '<p class="p-6 text-center text-xs text-gray-400">No calls yet</p>';
+  el.innerHTML = S.calls.slice(0,20).map(c => {
+    const u = userById(c.userId) || { name:'Unknown', avatar:'' };
+    const dir = c.missed ? '<i class="fa-solid fa-phone-missed text-red-500 text-xs"></i>' : c.direction === 'in' ? '<i class="fa-solid fa-arrow-down-left text-emerald-500 text-xs"></i>' : '<i class="fa-solid fa-arrow-up-right text-brand-500 text-xs"></i>';
+    return `<div class="p-3 flex items-center gap-3">
+      <img src="${esc(u.avatar)}" class="w-11 h-11 rounded-full object-cover">
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-sm truncate ${c.missed?'text-red-500':''}">${esc(u.name)}</p>
+        <p class="text-[11px] text-gray-500 flex items-center gap-1.5">${dir} ${new Date(c.at).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} · ${c.kind === 'video'?'Video':'Voice'}</p>
+      </div>
+      <button onclick="startCall('${c.kind}','${c.userId}')" class="w-9 h-9 rounded-full bg-brand-600 text-white flex items-center justify-center"><i class="fa-solid fa-${c.kind==='video'?'video':'phone'} text-xs"></i></button>
+    </div>`;
+  }).join('');
+}
+function newCallPicker() {
+  const others = S.users.filter(u => u.id !== S.currentUserId);
+  const html = `<div class="fixed inset-0 z-[180] bg-black/50 hidden items-end justify-center" id="call-pick" onclick="if(event.target===this)this.remove()">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl max-h-[70vh] flex flex-col slide-up">
+      <div class="p-4 border-b border-gray-100 dark:border-gray-800"><h3 class="font-black text-sm">Call someone</h3></div>
+      <div class="overflow-y-auto sb flex-1 divide-y divide-gray-100 dark:divide-gray-800">
+        ${others.map(u => `<button onclick="this.closest('#call-pick').remove();startCall('audio','${u.id}')" class="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-left">
+          <img src="${esc(u.avatar)}" class="w-10 h-10 rounded-full object-cover">
+          <span class="font-semibold text-sm">${esc(u.name)}</span>
+          <i class="fa-solid fa-phone ml-auto text-brand-500"></i>
+        </button>`).join('')}
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { $('call-pick').classList.remove('hidden'); $('call-pick').classList.add('flex'); }, 10);
+}
+
+/* ══════════ STATUS ══════════ */
+let statusType = 'text';
+let statusBg = 'bg-gradient-to-br from-indigo-500 to-purple-600';
+function renderStatusList() {
+  $('st-me-av').src = me().avatar;
+  const mine = S.statuses.filter(s => s.userId === S.currentUserId);
+  $('my-status-hint').textContent = mine.length ? `${mine.length} update${mine.length>1?'s':''}` : 'Tap to add status update';
+  const byUser = {};
+  S.statuses.forEach(s => { (byUser[s.userId] = byUser[s.userId]||[]).push(s); });
+  const items = Object.entries(byUser).map(([uid, arr]) => ({ user: userById(uid), statuses: arr })).filter(x => x.user);
+  $('status-list').innerHTML = items.length ? items.map(({user, statuses}) => {
+    const latest = statuses[statuses.length-1];
+    const preview = latest.type === 'text' ? `<div class="w-12 h-12 rounded-full ${latest.bg||'bg-brand-600'} flex items-center justify-center text-white text-lg">💬</div>` : `<img src="${esc(latest.media)}" class="w-12 h-12 rounded-full object-cover">`;
+    return `<button onclick="openStoryFor('${user.id}')" class="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-left">
+      <div class="p-[2px] rounded-full bg-gradient-to-tr from-emerald-500 via-teal-500 to-emerald-400">${preview}</div>
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-sm truncate">${esc(user.name)}</p>
+        <p class="text-[11px] text-gray-500">${fTime(latest.at)} · ${statuses.length} update${statuses.length>1?'s':''}</p>
+      </div>
+    </button>`;
+  }).join('') : '<p class="p-4 text-center text-xs text-gray-400">No status updates</p>';
+}
+function openStatusCreator() {
+  const html = `<div class="fixed inset-0 z-[180] bg-black/80 backdrop-blur-sm hidden items-end justify-center md:items-center p-0 md:p-4" id="sc-sheet">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 md:rounded-3xl rounded-t-3xl shadow-2xl slide-up max-h-[90vh] overflow-y-auto sb">
+      <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+        <h2 class="font-black text-base">New Status</h2>
+        <button onclick="this.closest('#sc-sheet').remove()" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-4 space-y-4">
+        <div class="flex gap-2">
+          <button onclick="stType('text')" data-stype="text" class="stype px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold">📝 Text</button>
+          <button onclick="stType('photo')" data-stype="photo" class="stype px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs font-bold">📷 Photo</button>
+        </div>
+        <div id="st-text-sec">
+          <textarea id="st-text" rows="3" placeholder="Type your status…" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500"></textarea>
+          <div class="mt-2 flex gap-1.5 flex-wrap">
+            ${['bg-gradient-to-br from-indigo-500 to-purple-600','bg-gradient-to-br from-pink-500 to-red-500','bg-gradient-to-br from-emerald-500 to-teal-600','bg-gradient-to-br from-amber-500 to-orange-600','bg-gray-900','bg-gradient-to-br from-blue-500 to-cyan-500'].map(b => `<button onclick="statusBg='${b}'" class="w-8 h-8 rounded-lg ${b} border-2 border-transparent hover:border-white"></button>`).join('')}
+          </div>
+        </div>
+        <div id="st-media-sec" class="hidden">
+          <input id="st-media" type="url" placeholder="Paste image URL" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500">
+          <button onclick="$('st-media').value=STOCK_MEDIA[Math.floor(Math.random()*STOCK_MEDIA.length)]" class="mt-2 text-[11px] font-bold text-emerald-500">🎲 Random image</button>
+        </div>
+        <input id="st-cap" type="text" placeholder="Caption (optional)" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500">
+        <input id="st-music" type="text" placeholder="🎵 Music (optional)" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500">
+        <button onclick="publishStatus()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm">Publish Status</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { $('sc-sheet').classList.remove('hidden'); $('sc-sheet').classList.add('flex'); }, 10);
+}
+function stType(t) {
+  statusType = t;
+  document.querySelectorAll('.stype').forEach(b => {
+    const on = b.dataset.stype === t;
+    b.className = `stype px-4 py-2 rounded-xl text-xs font-bold ${on?'bg-brand-600 text-white':'bg-gray-100 dark:bg-gray-800 text-gray-500'}`;
+  });
+  $('st-text-sec').classList.toggle('hidden', t !== 'text');
+  $('st-media-sec').classList.toggle('hidden', t !== 'photo');
+}
+function publishStatus() {
+  const type = statusType;
+  const cap = $('st-cap').value.trim();
+  const music = $('st-music').value.trim();
+  const s = { id:'s'+uid(), userId:S.currentUserId, type, at:now(), viewers:[], reactions:{}, caption:cap, music };
+  if (type === 'text') {
+    const t = $('st-text').value.trim();
+    if (!t) return toast('Write something', 'error');
+    s.text = t; s.bg = statusBg;
+  } else {
+    const m = $('st-media').value.trim();
+    if (!m) return toast('Add media URL', 'error');
+    s.media = m;
+  }
+  S.statuses.unshift(s);
+  saveState();
+  $('sc-sheet').remove();
+  renderStatusList();
+  toast('Status published ⏳', 'success');
+}
+let storyUser = null, storyIdx = 0, storyTimer = null;
+function openStoryFor(userId) {
+  const arr = S.statuses.filter(s => s.userId === userId);
+  if (!arr.length) return;
+  storyUser = userId; storyIdx = 0;
+  showStory();
+  $('story-scr').classList.remove('hidden');
+  $('story-scr').classList.add('flex');
+}
+function showStory() {
+  const arr = S.statuses.filter(s => s.userId === storyUser);
+  const s = arr[storyIdx];
+  if (!s) return closeStory();
+  const u = userById(s.userId);
+  $('story-av').src = u.avatar;
+  $('story-name').textContent = u.name;
+  $('story-time').textContent = fTime(s.at);
+  const content = $('story-content');
+  if (s.type === 'text') {
+    content.innerHTML = `<div class="${s.bg||'bg-brand-600'} w-[300px] h-[400px] max-w-[80vw] max-h-[70vh] flex items-center justify-center p-6 text-center text-white text-2xl font-bold rounded-2xl">${esc(s.text)}</div>`;
+  } else {
+    content.innerHTML = `<img src="${esc(s.media)}" class="max-w-[80vw] max-h-[70vh] object-contain rounded-2xl">`;
+  }
+  const musicEl = s.music ? `<div class="absolute top-4 left-4 bg-black/60 backdrop-blur text-white text-[11px] px-3 py-1.5 rounded-full"><i class="fa-solid fa-music mr-1"></i>${esc(s.music)}</div>` : '';
+  const capEl = s.caption ? `<div class="absolute bottom-20 left-0 right-0 text-center text-white text-sm px-6 drop-shadow-lg">${esc(s.caption)}</div>` : '';
+  content.innerHTML += musicEl + capEl;
+  $('story-views').innerHTML = `<i class="fa-solid fa-eye mr-1"></i>${(s.viewers?.length||0)}`;
+  $('story-progs').innerHTML = arr.map((_, i) => `<div class="flex-1 h-0.5 rounded-full bg-white/30 overflow-hidden story-prog ${i<storyIdx?'done':''} ${i===storyIdx?'active':''}"><i></i></div>`).join('');
+  clearTimeout(storyTimer);
+  storyTimer = setTimeout(nextStory, 5000);
+  if (!s.viewers) s.viewers = [];
+  if (!s.viewers.includes(S.currentUserId)) s.viewers.push(S.currentUserId);
+  saveState();
+}
+function nextStory() {
+  const arr = S.statuses.filter(s => s.userId === storyUser);
+  if (storyIdx < arr.length-1) { storyIdx++; showStory(); }
+  else closeStory();
+}
+function prevStory() { if (storyIdx > 0) { storyIdx--; showStory(); } }
+function closeStory() {
+  clearTimeout(storyTimer);
+  $('story-scr').classList.add('hidden');
+  $('story-scr').classList.remove('flex');
+}
+function reactStory(emoji) {
+  const arr = S.statuses.filter(s => s.userId === storyUser);
+  const s = arr[storyIdx];
+  if (!s) return;
+  s.reactions = s.reactions || {};
+  s.reactions[emoji] = (s.reactions[emoji]||0) + 1;
+  saveState();
+  toast(`${emoji} Reacted`, 'success');
+}
+
+/* ══════════ GROUPS ══════════ */
+function renderGroups() {
+  const groups = S.chats.filter(c => c.type === 'group');
+  const el = $('groups-list');
+  if (!groups.length) return el.innerHTML = '<p class="text-center text-xs text-gray-400 py-8">No groups yet</p>';
+  el.innerHTML = groups.map(g => `<button onclick="openConv('${g.id}')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-left">
+    <img src="${esc(g.avatar||IMG_POOL[3])}" class="w-12 h-12 rounded-full object-cover">
+    <div class="flex-1 min-w-0">
+      <p class="font-bold text-sm truncate">${esc(g.name)}</p>
+      <p class="text-[11px] text-gray-500">${(g.memberIds?.length||0)} members · ${esc(g.lastMsg||'')}</p>
+    </div>
+  </button>`).join('');
+}
+function openGroupCreator() {
+  const members = S.users.filter(u => u.id !== S.currentUserId);
+  const html = `<div class="fixed inset-0 z-[180] bg-black/80 backdrop-blur-sm hidden items-end justify-center md:items-center p-0 md:p-4" id="gc-sheet">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 md:rounded-3xl rounded-t-3xl shadow-2xl slide-up max-h-[90vh] overflow-y-auto sb">
+      <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+        <h2 class="font-black text-base">New Group</h2>
+        <button onclick="this.closest('#gc-sheet').remove()" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="event.preventDefault();createGroup()" class="p-4 space-y-3">
+        <input id="g-name" required placeholder="Group name" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+        <input id="g-desc" placeholder="Description" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+        <p class="text-[10px] font-black text-gray-400 tracking-wider pt-1">ADD MEMBERS</p>
+        <div class="max-h-48 overflow-y-auto sb border border-gray-200 dark:border-gray-800 rounded-xl divide-y divide-gray-100 dark:divide-gray-800">
+          ${members.map(u => `<label class="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
+            <input type="checkbox" value="${u.id}" class="g-member accent-brand-600 w-4 h-4">
+            <img src="${esc(u.avatar)}" class="w-9 h-9 rounded-full object-cover">
+            <span class="text-sm font-semibold">${esc(u.name)}</span>
+          </label>`).join('')}
+        </div>
+        <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm">Create Group</button>
+      </form>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { $('gc-sheet').classList.remove('hidden'); $('gc-sheet').classList.add('flex'); }, 10);
+}
+function createGroup() {
+  const name = $('g-name').value.trim();
+  if (!name) return toast('Group name required', 'error');
+  const desc = $('g-desc').value.trim();
+  const memberIds = [S.currentUserId, ...Array.from(document.querySelectorAll('.g-member:checked')).map(c => c.value)];
+  const g = {
+    id:'g'+uid(), type:'group', name, avatar: IMG_POOL[Math.floor(Math.random()*IMG_POOL.length)],
+    memberIds, admins: [S.currentUserId], createdBy: S.currentUserId,
+    lastMsg: 'Group created', lastTime: now(), unread: 0, desc
+  };
+  S.chats.push(g);
+  S.messages[g.id] = [{ id:'m'+uid(), from:'system', type:'text', text:`Group "${name}" created.`, at:now() }];
+  saveState();
+  $('gc-sheet').remove();
+  renderGroups();
+  toast('Group created 🎉', 'success');
+}
+
+/* ══════════ COMMUNITIES ══════════ */
+function renderCommunities() {
+  const el = $('communities-list');
+  if (!S.communities.length) return el.innerHTML = '<p class="text-center text-xs text-gray-400 py-8">No communities yet</p>';
+  el.innerHTML = S.communities.map(c => `<div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+    <div class="p-4 flex items-start gap-3">
+      <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-2xl shrink-0">${c.emoji}</div>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-bold text-sm">${esc(c.name)}</h3>
+        <p class="text-[11px] text-gray-500 mt-0.5">${esc(c.desc)}</p>
+        <p class="text-[10px] text-gray-400 mt-1"><i class="fa-solid fa-users mr-1"></i>${(c.members/1000).toFixed(1)}k members · ${c.channels.length} channels</p>
+      </div>
+    </div>
+    <div class="px-4 pb-3 flex gap-2 overflow-x-auto no-sb">
+      ${c.channels.map(ch => `<button onclick="toast('Opening #${ch.name}','info')" class="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[11px] font-bold whitespace-nowrap hover:bg-cyan-100 dark:hover:bg-cyan-900/30">#${ch.name} <span class="text-gray-400 ml-1">${ch.posts}</span></button>`).join('')}
+    </div>
+    <div class="px-4 pb-4">
+      <button onclick="toast('Joined ${esc(c.name)}','success')" class="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold">Join Community</button>
+    </div>
+  </div>`).join('');
+}
+function openCommunityCreator() {
+  const html = `<div class="fixed inset-0 z-[180] bg-black/80 backdrop-blur-sm hidden items-end justify-center md:items-center p-0 md:p-4" id="cc-sheet">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 md:rounded-3xl rounded-t-3xl shadow-2xl slide-up">
+      <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+        <h2 class="font-black text-base">New Community</h2>
+        <button onclick="this.closest('#cc-sheet').remove()" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="event.preventDefault();createCommunity()" class="p-4 space-y-3">
+        <input id="c-name" required placeholder="Community name" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500">
+        <textarea id="c-desc" rows="2" placeholder="Description" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500"></textarea>
+        <button type="submit" class="w-full py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl text-sm">Create Community</button>
+      </form>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { $('cc-sheet').classList.remove('hidden'); $('cc-sheet').classList.add('flex'); }, 10);
+}
+function createCommunity() {
+  const name = $('c-name').value.trim();
+  const desc = $('c-desc').value.trim();
+  if (!name) return toast('Name required', 'error');
+  const co = { id:'co'+uid(), name, desc, emoji: ['💬','🚀','🎯','🌟','🔥','💡'][Math.floor(Math.random()*6)], members: 1, channels: [{ id:'ch'+uid(), name:'general', posts:0 }], createdBy: S.currentUserId, admins:[S.currentUserId] };
+  S.communities.unshift(co);
+  saveState();
+  $('cc-sheet').remove();
+  renderCommunities();
+  toast('Community created 🎉', 'success');
+}
+
+/* ══════════ AI ══════════ */
+const AI_GREETING = { role:'ai', text: "Hi! I'm **Boi AchiverAI**, your free assistant. I can:\n\n• Answer questions on any topic\n• Help you write messages & captions\n• Summarize conversations\n• Generate hashtags\n• Assist with community content\n\nWhat can I help you with today?" };
+function renderAiStream() {
+  const box = $('ai-stream');
+  if (!S.aiHistory.length) S.aiHistory = [AI_GREETING];
+  box.innerHTML = S.aiHistory.map(m => {
+    const mine = m.role === 'user';
+    return `<div class="flex gap-2 ${mine?'flex-row-reverse':''} fade-up">
+      <div class="w-8 h-8 rounded-full ${mine?'bg-brand-600':'bg-purple-600'} flex items-center justify-center text-white shrink-0 text-xs"><i class="fa-solid ${mine?'fa-user':'fa-robot'}"></i></div>
+      <div class="max-w-[80%] ${mine?'bg-brand-600 text-white':'bg-purple-50 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-800/40'} px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap">${esc(m.text).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}</div>
+    </div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+}
+function aiQuick(q) { $('ai-in').value = q; aiSend(); }
+async function aiSend() {
+  const inp = $('ai-in');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  S.aiHistory.push({ role:'user', text });
+  S.aiRequests = (S.aiRequests||0) + 1;
+  renderAiStream(); saveState();
+  const box = $('ai-stream');
+  const lid = 'ai-load-'+Date.now();
+  box.insertAdjacentHTML('beforeend', `<div id="${lid}" class="flex gap-2 fade-up">
+    <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white shrink-0 text-xs"><i class="fa-solid fa-robot"></i></div>
+    <div class="bg-purple-50 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-800/40 px-3.5 py-2.5 rounded-2xl text-sm text-purple-400 flex items-center gap-2"><span class="tdot"></span><span class="tdot"></span><span class="tdot"></span></div>
+  </div>`);
+  box.scrollTop = box.scrollHeight;
+  await new Promise(r => setTimeout(r, 900 + Math.random()*700));
+  const reply = generateAI(text);
+  $(lid).remove();
+  S.aiHistory.push({ role:'ai', text:reply });
+  renderAiStream(); saveState();
+}
+function generateAI(q) {
+  const l = q.toLowerCase();
+  const me_ = me();
+  if (l.includes('summar')) {
+    const c = S.chats.find(c => c.id === activeChat) || S.chats[0];
+    if (!c) return "I don't see an active conversation to summarize yet.";
+    const msgs = S.messages[c.id] || [];
+    const parts = msgs.slice(-6).map(m => { const u = userById(m.from); return `• ${u?.name || 'System'}: ${m.text?.slice(0,60) || '[media]'}`; }).join('\n');
+    return `📝 **Summary of "${chatTitle(c)}"** (${msgs.length} messages):\n\n${parts}\n\n**Theme:** ${msgs.length > 4 ? 'Active back-and-forth discussion' : 'Brief exchange'} — no urgent action items detected.`;
+  }
+  if (l.includes('caption') || l.includes('status')) {
+    return `Here are 3 caption options:\n\n1️⃣ 🚀 Building the future, one line of code at a time. #AchiverMindset\n\n2️⃣ ☀️ Morning clarity. Evening focus. Nothing in between. #DeepWork\n\n3️⃣ The best time to start was yesterday. The second best is now. ⚡`;
+  }
+  if (l.includes('hashtag')) return "Here are 8 hashtags for a tech post:\n\n#SocialfreeText #AchiverAI #BuildInPublic #Web3 #TechTwitter #Innovation #StartupLife #CreatorEconomy";
+  if (l.includes('quantum')) return "**Quantum Computing** — simply:\n\nA regular computer uses *bits* — each one is either 0 or 1.\n\nA quantum computer uses *qubits*. Thanks to **superposition**, a qubit can be 0, 1, or both at the same time.\n\nThis means quantum computers can explore many possibilities simultaneously, solving certain problems exponentially faster than classical computers.";
+  if (l.includes('help') && l.includes('write') || l.includes('draft') || l.includes('message to')) return "Sure! Here's a warm message you can send:\n\n> Hey! Hope you're doing well. I was thinking about our last chat and wanted to follow up. Let me know when you have a few minutes. 😊";
+  if (l.includes('who are you') || l.includes('what are you')) return "I'm **Boi AchiverAI** — the built-in assistant for SocialfreeText. I'm completely free to use, and I'm here to help with anything from answering questions to writing captions to summarizing your chats. 🤖✨";
+  if (l.includes('hello') || l.includes('hi ') || l === 'hi' || l.includes('hey')) return `Hey ${me_?.name?.split(' ')[0] || 'there'}! 👋 What can I help you with today?`;
+  return `Great question. Here's my take:\n\n${q.slice(0,100)} — this touches on a topic worth exploring.\n\n**Key points to consider:**\n• Start by defining your goal clearly\n• Break it into smaller, testable steps\n• Iterate quickly and measure results\n• Ask for feedback from people you trust`;
+}
+function clearAi() { S.aiHistory = [AI_GREETING]; saveState(); renderAiStream(); toast('AI chat cleared', 'info'); }
+
+/* ══════════ PROFILE ══════════ */
+function renderProfile() {
+  const u = me();
+  $('pr-av').src = u.avatar;
+  $('pr-name').textContent = u.name;
+  $('pr-badge').classList.toggle('hidden', !u.verified);
+  $('pr-handle').textContent = '@' + u.username;
+  $('pr-bio').textContent = u.bio || 'No bio yet.';
+  $('pr-role').textContent = u.role;
+  $('pr-status').textContent = u.status === 'active' ? 'Active' : u.status;
+  $('pr-followers').textContent = (u.followers||0).toLocaleString();
+  $('pr-following').textContent = (u.following||0).toLocaleString();
+}
+function editProfile() {
+  const u = me();
+  const html = `<div class="fixed inset-0 z-[180] bg-black/80 backdrop-blur-sm hidden items-end justify-center md:items-center p-0 md:p-4" id="ep-sheet">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 md:rounded-3xl rounded-t-3xl shadow-2xl slide-up max-h-[90vh] overflow-y-auto sb">
+      <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+        <h2 class="font-black text-base">Edit Profile</h2>
+        <button onclick="this.closest('#ep-sheet').remove()" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="event.preventDefault();saveProfileEdit()" class="p-4 space-y-3">
+        <div class="flex justify-center"><img id="ep-preview" src="${esc(u.avatar)}" class="w-24 h-24 rounded-2xl object-cover border-4 border-brand-500/30"></div>
+        <input id="ep-av-url" value="${esc(u.avatar)}" placeholder="Avatar URL" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs focus:outline-none focus:ring-1 focus:ring-brand-500">
+        <button type="button" onclick="$('ep-av-url').value=IMG_POOL[Math.floor(Math.random()*IMG_POOL.length)];$('ep-preview').src=$('ep-av-url').value" class="w-full text-[11px] font-bold text-brand-500 py-1">🎲 Random avatar</button>
+        <input id="ep-name" value="${esc(u.name)}" required placeholder="Display name" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+        <input id="ep-user" value="${esc(u.username)}" required placeholder="Username" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+        <textarea id="ep-bio" rows="3" placeholder="Bio" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-brand-500">${esc(u.bio||'')}</textarea>
+        <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm">Save</button>
+      </form>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { $('ep-sheet').classList.remove('hidden'); $('ep-sheet').classList.add('flex'); }, 10);
+  setTimeout(() => $('ep-av-url').addEventListener('input', e => $('ep-preview').src = e.target.value), 30);
+}
+function saveProfileEdit() {
+  const u = me();
+  u.name = $('ep-name').value.trim() || u.name;
+  u.username = $('ep-user').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'') || u.username;
+  u.bio = $('ep-bio').value.trim();
+  u.avatar = $('ep-av-url').value.trim() || u.avatar;
+  saveState();
+  $('ep-sheet').remove();
+  $('hdr-avatar').src = u.avatar;
+  $('sb-avatar').src = u.avatar;
+  $('sb-name').textContent = u.name;
+  $('sb-handle').textContent = '@' + u.username;
+  renderProfile();
+  toast('Profile updated', 'success');
+}
+
+/* ══════════ SEARCH ══════════ */
+function renderSearch() {
+  const q = $('search-q').value.trim().toLowerCase();
+  const el = $('search-results');
+  if (!q) { el.innerHTML = '<p class="text-center text-xs text-gray-400 py-6">Start typing to search</p>'; return; }
+  const users = S.users.filter(u => u.id !== S.currentUserId && (u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q)));
+  const groups = S.chats.filter(c => c.type === 'group' && c.name.toLowerCase().includes(q));
+  const communities = S.communities.filter(c => c.name.toLowerCase().includes(q));
+  el.innerHTML = `
+    ${users.length ? `<p class="text-[10px] font-black text-gray-400 tracking-wider px-1 pt-1">USERS</p>` + users.map(u => `
+      <button onclick="openUserProfile('${u.id}')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-left">
+        <img src="${esc(u.avatar)}" class="w-11 h-11 rounded-full object-cover">
+        <div class="flex-1 min-w-0"><p class="font-bold text-sm truncate">${esc(u.name)}</p><p class="text-[11px] text-gray-500">@${esc(u.username)}</p></div>
+        <i class="fa-solid fa-message text-brand-500"></i>
+      </button>`).join('') : ''}
+    ${groups.length ? `<p class="text-[10px] font-black text-gray-400 tracking-wider px-1 pt-2">GROUPS</p>` + groups.map(g => `
+      <button onclick="openConv('${g.id}')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-left">
+        <img src="${esc(g.avatar)}" class="w-11 h-11 rounded-full object-cover">
+        <div class="flex-1 min-w-0"><p class="font-bold text-sm truncate">${esc(g.name)}</p><p class="text-[11px] text-gray-500">${g.memberIds?.length} members</p></div>
+      </button>`).join('') : ''}
+    ${communities.length ? `<p class="text-[10px] font-black text-gray-400 tracking-wider px-1 pt-2">COMMUNITIES</p>` + communities.map(c => `
+      <button onclick="go('communities')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-left">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-xl">${c.emoji}</div>
+        <div class="flex-1 min-w-0"><p class="font-bold text-sm truncate">${esc(c.name)}</p><p class="text-[11px] text-gray-500">${(c.members/1000).toFixed(1)}k members</p></div>
+      </button>`).join('') : ''}
+    ${!users.length && !groups.length && !communities.length ? '<p class="text-center text-xs text-gray-400 py-6">No results</p>' : ''}`;
+}
+function openUserProfile(id) {
+  const u = userById(id);
+  if (!u) return;
+  let c = S.chats.find(c => c.type === 'dm' && c.userId === id);
+  if (!c) {
+    c = { id:'c'+uid(), type:'dm', userId:id, lastMsg:'', lastTime:now(), unread:0 };
+    S.chats.push(c); S.messages[c.id] = [];
+    saveState();
+  }
+  go('chats');
+  setTimeout(() => openConv(c.id), 100);
+}
+
+/* ══════════ NOTIFICATIONS ══════════ */
+function renderNotifs() {
+  const list = $('notif-list');
+  if (!list) return;
+  const unread = S.notifications.filter(n => !n.read).length;
+  $('notif-dot').classList.toggle('hidden', !unread);
+  list.innerHTML = S.notifications.length ? S.notifications.slice(0,8).map(n => `<div class="p-3 flex gap-3 ${n.read?'opacity-60':''}">
+    <div class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center ${n.color} shrink-0"><i class="fa-solid ${n.icon} text-xs"></i></div>
+    <div class="flex-1 min-w-0"><p class="text-xs leading-relaxed">${n.text}</p><p class="text-[10px] text-gray-400 mt-0.5">${fTime(n.at)}</p></div>
+    ${!n.read ? '<span class="w-2 h-2 rounded-full bg-brand-500 shrink-0 mt-2"></span>' : ''}
+  </div>`).join('') : '<p class="p-6 text-center text-xs text-gray-400">No notifications</p>';
+}
+function toggleNotif() { $('notif-panel').classList.toggle('hidden'); }
+function markRead() { S.notifications.forEach(n => n.read = true); saveState(); renderNotifs(); toast('Marked as read', 'success'); }
+
+/* ══════════ SETTINGS CENTER ══════════ */
+function renderSettingsMain() {
+  const u = me();
+  $('set-av').src = u.avatar;
+  $('set-name').textContent = u.name;
+  $('set-handle').textContent = '@' + u.username;
+  $('set-email').textContent = u.email;
+  $('set-theme-badge').textContent = S.theme === 'dark' ? 'Dark' : 'Light';
+  $('settings-main').classList.remove('hidden');
+  $('settings-sub').classList.add('hidden');
+  $('settings-sub').innerHTML = '';
+  $('settings-back').classList.add('hidden');
+  $('settings-title').textContent = 'Settings';
+}
+function settingsBack() { renderSettingsMain(); }
+const SETTINGS_PANELS = {
+  account: () => {
+    const u = me();
+    return `
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+        <button onclick="editProfile()" class="set-row w-full">
+          <div class="flex items-center gap-3">
+            <img src="${esc(u.avatar)}" class="w-12 h-12 rounded-full object-cover">
+            <div class="text-left"><p class="font-bold text-sm">${esc(u.name)}</p><p class="text-[11px] text-gray-500">@${esc(u.username)}</p></div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+        </button>
+        <div class="set-row"><div><p class="text-[10px] font-black text-gray-400 tracking-wider">EMAIL</p><p class="font-semibold text-sm mt-0.5">${esc(u.email)}</p></div></div>
+        <div class="set-row"><div><p class="text-[10px] font-black text-gray-400 tracking-wider">BIO</p><p class="text-sm mt-0.5">${esc(u.bio || 'Not set')}</p></div></div>
+        <div class="set-row"><div><p class="text-[10px] font-black text-gray-400 tracking-wider">USERNAME</p><p class="font-mono text-sm mt-0.5">@${esc(u.username)}</p></div></div>
+        <button onclick="editProfile()" class="set-row w-full text-brand-500 font-bold text-sm justify-center">
+          <i class="fa-solid fa-pen mr-2"></i>Edit Personal Information
+        </button>
+      </div>
+    `;
+  },
+  security: () => {
+    const u = me();
+    return `
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+        <button onclick="openPasswordChange()" class="set-row w-full">
+          <div class="flex items-center gap-3">
+            <div class="set-ico bg-emerald-500/10 text-emerald-500"><i class="fa-solid fa-key"></i></div>
+            <div class="text-left"><p class="font-bold text-sm">Change Password</p><p class="text-[11px] text-gray-500">Last changed: never</p></div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+        </button>
+        <div class="set-row">
+          <div class="flex items-center gap-3">
+            <div class="set-ico bg-brand-500/10 text-brand-500"><i class="fa-solid fa-shield-halved"></i></div>
+            <div class="text-left"><p class="font-bold text-sm">Two-Factor Auth</p><p class="text-[11px] text-gray-500">Extra login security</p></div>
+          </div>
+          <button onclick="toggle2FA(this)" class="w-12 h-6 rounded-full ${u.twoFA?'bg-emerald-500':'bg-gray-300 dark:bg-gray-700'} relative transition">
+            <span class="absolute top-0.5 ${u.twoFA?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>
+          </button>
+        </div>
+        <button onclick="openRecovery()" class="set-row w-full">
+          <div class="flex items-center gap-3">
+            <div class="set-ico bg-amber-500/10 text-amber-500"><i class="fa-solid fa-life-ring"></i></div>
+            <div class="text-left"><p class="font-bold text-sm">Recovery Email</p><p class="text-[11px] text-gray-500">${esc(u.recoveryEmail || 'Not set — tap to add')}</p></div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+        </button>
+        <div class="set-row">
+          <div class="flex items-center gap-3">
+            <div class="set-ico bg-purple-500/10 text-purple-500"><i class="fa-solid fa-eye"></i></div>
+            <div class="text-left"><p class="font-bold text-sm">Read Receipts</p><p class="text-[11px] text-gray-500">Show blue ticks</p></div>
+          </div>
+          <button onclick="toggleSetting('readReceipts',this,true)" class="w-12 h-6 rounded-full ${S.settings.readReceipts!==false?'bg-brand-600':'bg-gray-300 dark:bg-gray-700'} relative transition">
+            <span class="absolute top-0.5 ${S.settings.readReceipts!==false?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>
+          </button>
+        </div>
+      </div>
+    `;
+  },
+  blocked: () => {
+    const u = me();
+    const blocked = (u.blocked || []).map(id => userById(id)).filter(Boolean);
+    return `
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+        <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+          <h3 class="font-bold text-sm">Blocked Contacts</h3>
+          <button onclick="openBlockPicker()" class="text-[11px] font-bold text-brand-500">+ Block</button>
+        </div>
+        ${blocked.length ? blocked.map(b => `<div class="set-row">
+          <div class="flex items-center gap-3">
+            <img src="${esc(b.avatar)}" class="w-11 h-11 rounded-full object-cover">
+            <div><p class="font-bold text-sm">${esc(b.name)}</p><p class="text-[11px] text-gray-500">@${esc(b.username)}</p></div>
+          </div>
+          <button onclick="unblockUser('${b.id}')" class="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-500 text-[11px] font-bold">Unblock</button>
+        </div>`).join('') : '<p class="p-6 text-center text-xs text-gray-400">No blocked contacts</p>'}
+      </div>
+    `;
+  },
+  appearance: () => `
+    <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-purple-500/10 text-purple-500"><i class="fa-solid fa-moon"></i></div>
+          <div><p class="font-bold text-sm">Dark Mode</p><p class="text-[11px] text-gray-500">Currently ${S.theme === 'dark' ? 'on' : 'off'}</p></div>
+        </div>
+        <button onclick="toggleTheme();renderSettingsSub('appearance')" class="px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold">
+          <i class="fa-solid ${S.theme === 'dark' ? 'fa-sun text-amber-400' : 'fa-moon'} mr-1.5"></i>${S.theme === 'dark' ? 'Dark' : 'Light'}
+        </button>
+      </div>
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-blue-500/10 text-blue-500"><i class="fa-solid fa-text-height"></i></div>
+          <div><p class="font-bold text-sm">Font Size</p><p class="text-[11px] text-gray-500">Medium (default)</p></div>
+        </div>
+        <span class="text-[11px] text-gray-400">Medium</span>
+      </div>
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-pink-500/10 text-pink-500"><i class="fa-solid fa-image"></i></div>
+          <div><p class="font-bold text-sm">Chat Wallpaper</p><p class="text-[11px] text-gray-500">Dots pattern</p></div>
+        </div>
+        <button onclick="toast('Wallpaper options coming soon','info')" class="text-[11px] font-bold text-brand-500">Change</button>
+      </div>
+    </div>
+  `,
+  notifications: () => `
+    <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-amber-500/10 text-amber-500"><i class="fa-solid fa-volume-high"></i></div>
+          <div><p class="font-bold text-sm">Message Sounds</p><p class="text-[11px] text-gray-500">Chime on new message</p></div>
+        </div>
+        <button onclick="toggleSetting('sounds',this,true)" class="w-12 h-6 rounded-full ${S.settings.sounds?'bg-brand-600':'bg-gray-300 dark:bg-gray-700'} relative">
+          <span class="absolute top-0.5 ${S.settings.sounds?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>
+        </button>
+      </div>
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-brand-500/10 text-brand-500"><i class="fa-solid fa-comment"></i></div>
+          <div><p class="font-bold text-sm">Message Previews</p><p class="text-[11px] text-gray-500">Show message content</p></div>
+        </div>
+        <button onclick="toggleSetting('previews',this,true)" class="w-12 h-6 rounded-full ${S.settings.previews!==false?'bg-brand-600':'bg-gray-300 dark:bg-gray-700'} relative">
+          <span class="absolute top-0.5 ${S.settings.previews!==false?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>
+        </button>
+      </div>
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-emerald-500/10 text-emerald-500"><i class="fa-solid fa-users"></i></div>
+          <div><p class="font-bold text-sm">Group Notifications</p><p class="text-[11px] text-gray-500">Notify about group activity</p></div>
+        </div>
+        <button onclick="toggleSetting('groupNotif',this,true)" class="w-12 h-6 rounded-full ${S.settings.groupNotif!==false?'bg-brand-600':'bg-gray-300 dark:bg-gray-700'} relative">
+          <span class="absolute top-0.5 ${S.settings.groupNotif!==false?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>
+        </button>
+      </div>
+    </div>
+  `,
+  chats: () => `
+    <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-brand-500/10 text-brand-500"><i class="fa-solid fa-reply"></i></div>
+          <div><p class="font-bold text-sm">AI Auto-Reply</p><p class="text-[11px] text-gray-500">Smart suggested replies</p></div>
+        </div>
+        <button onclick="toggleSetting('autoReply',this,true)" class="w-12 h-6 rounded-full ${S.settings.autoReply?'bg-brand-600':'bg-gray-300 dark:bg-gray-700'} relative">
+          <span class="absolute top-0.5 ${S.settings.autoReply?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>
+        </button>
+      </div>
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-emerald-500/10 text-emerald-500"><i class="fa-solid fa-download"></i></div>
+          <div><p class="font-bold text-sm">Auto-Download Media</p><p class="text-[11px] text-gray-500">Images & files automatically</p></div>
+        </div>
+        <button onclick="toggleSetting('mediaAuto',this,true)" class="w-12 h-6 rounded-full ${S.settings.mediaAuto?'bg-brand-600':'bg-gray-300 dark:bg-gray-700'} relative">
+          <span class="absolute top-0.5 ${S.settings.mediaAuto?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>
+        </button>
+      </div>
+      <button onclick="toast('Chat backup started','success')" class="set-row w-full">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-amber-500/10 text-amber-500"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+          <div class="text-left"><p class="font-bold text-sm">Backup Chats</p><p class="text-[11px] text-gray-500">Save encrypted backup</p></div>
+        </div>
+        <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+      </button>
+    </div>
+  `,
+  ai: () => `
+    <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-gradient-to-br from-purple-500 to-indigo-500 text-white"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+          <div><p class="font-bold text-sm">AI Suggestions</p><p class="text-[11px] text-gray-500">Smart reply hints in chat</p></div>
+        </div>
+        <button onclick="toggleSetting('aiSuggest',this,true)" class="w-12 h-6 rounded-full ${S.settings.aiSuggest!==false?'bg-brand-600':'bg-gray-300 dark:bg-gray-700'} relative">
+          <span class="absolute top-0.5 ${S.settings.aiSuggest!==false?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>
+        </button>
+      </div>
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-purple-500/10 text-purple-500"><i class="fa-solid fa-clock-rotate-left"></i></div>
+          <div><p class="font-bold text-sm">AI Chat History</p><p class="text-[11px] text-gray-500">${S.aiHistory.length - 1} messages saved</p></div>
+        </div>
+        <button onclick="clearAi();renderSettingsSub('ai')" class="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-500 text-[11px] font-bold">Clear</button>
+      </div>
+      <div class="set-row">
+        <div class="flex items-center gap-3">
+          <div class="set-ico bg-purple-500/10 text-purple-500"><i class="fa-solid fa-robot"></i></div>
+          <div><p class="font-bold text-sm">AI Model</p><p class="text-[11px] text-gray-500">Boi AchiverAI · Local engine</p></div>
+        </div>
+        <span class="text-[10px] font-bold text-emerald-500">ACTIVE</span>
+      </div>
+    </div>
+  `,
+  storage: () => {
+    const size = (JSON.stringify(S).length / 1024).toFixed(1);
+    const msgCount = Object.values(S.messages).reduce((a,m) => a+m.length, 0);
+    return `
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+        <div class="p-4">
+          <p class="text-[10px] font-black text-gray-400 tracking-wider">USAGE</p>
+          <div class="flex items-end gap-2 mt-1"><p class="text-2xl font-black">${size} KB</p><p class="text-[11px] text-gray-500 mb-1">local data</p></div>
+          <div class="mt-3 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden"><div class="h-full bg-gradient-to-r from-brand-500 to-purple-500" style="width:${Math.min(100, size/50)}%"></div></div>
+        </div>
+        <div class="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-800 text-center">
+          <div class="p-3"><p class="text-lg font-black">${S.chats.length}</p><p class="text-[10px] text-gray-500">Chats</p></div>
+          <div class="p-3"><p class="text-lg font-black">${msgCount}</p><p class="text-[10px] text-gray-500">Messages</p></div>
+          <div class="p-3"><p class="text-lg font-black">${S.statuses.length}</p><p class="text-[10px] text-gray-500">Statuses</p></div>
+        </div>
+        <button onclick="exportData()" class="set-row w-full">
+          <div class="flex items-center gap-3"><div class="set-ico bg-brand-500/10 text-brand-500"><i class="fa-solid fa-download"></i></div><div class="text-left"><p class="font-bold text-sm">Export All Data</p><p class="text-[11px] text-gray-500">Download JSON backup</p></div></div>
+          <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+        </button>
+        <button onclick="clearCache()" class="set-row w-full">
+          <div class="flex items-center gap-3"><div class="set-ico bg-amber-500/10 text-amber-500"><i class="fa-solid fa-broom"></i></div><div class="text-left"><p class="font-bold text-sm">Clear Cache</p><p class="text-[11px] text-gray-500">Free up temporary space</p></div></div>
+          <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+        </button>
+        <button onclick="resetAll()" class="set-row w-full">
+          <div class="flex items-center gap-3"><div class="set-ico bg-red-500/10 text-red-500"><i class="fa-solid fa-trash"></i></div><div class="text-left"><p class="font-bold text-sm text-red-500">Reset All Data</p><p class="text-[11px] text-gray-500">Erase everything and start fresh</p></div></div>
+          <i class="fa-solid fa-chevron-right text-red-400 text-xs"></i>
+        </button>
+      </div>
+    `;
+  },
+  about: () => `
+    <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+      <div class="p-6 text-center border-b border-gray-100 dark:border-gray-800">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center mx-auto mb-3 text-2xl text-white shadow-lg shadow-brand-600/25"><i class="fa-solid fa-bolt"></i></div>
+        <h3 class="font-black text-lg">SocialfreeText</h3>
+        <p class="text-[11px] text-gray-500 mt-1">Version 3.1 · Built by Boi Achiver</p>
+      </div>
+      <button onclick="toast('Thanks for the love! ❤️','success')" class="set-row w-full">
+        <div class="flex items-center gap-3"><div class="set-ico bg-red-500/10 text-red-500"><i class="fa-solid fa-heart"></i></div><div class="text-left"><p class="font-bold text-sm">Rate the App</p><p class="text-[11px] text-gray-500">Show some love</p></div></div>
+        <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+      </button>
+      <button onclick="toast('Support: support@socialfreetext.app','info')" class="set-row w-full">
+        <div class="flex items-center gap-3"><div class="set-ico bg-blue-500/10 text-blue-500"><i class="fa-solid fa-headset"></i></div><div class="text-left"><p class="font-bold text-sm">Contact Support</p><p class="text-[11px] text-gray-500">support@socialfreetext.app</p></div></div>
+        <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+      </button>
+      <div class="p-4 text-center text-[10px] text-gray-400"><p>© 2025 SocialfreeText. All rights reserved.</p><p class="mt-1">Terms · Privacy · Cookies</p></div>
+    </div>
+  `
+};
+function openSubSettings(key) {
+  $('settings-main').classList.add('hidden');
+  $('settings-sub').classList.remove('hidden');
+  $('settings-back').classList.remove('hidden');
+  const titles = { account:'Personal Info', security:'Privacy & Security', blocked:'Blocked Contacts', appearance:'Appearance', notifications:'Notifications', chats:'Chats', ai:'Boi AchiverAI', storage:'Storage & Data', about:'About & Help' };
+  $('settings-title').textContent = titles[key] || 'Settings';
+  $('settings-sub').innerHTML = (SETTINGS_PANELS[key] || (() => '<p class="text-center text-xs text-gray-400">Section coming soon</p>'))();
+}
+function renderSettingsSub(key) { openSubSettings(key); }
+function toggleSetting(key, btn, custom) {
+  S.settings[key] = !S.settings[key];
+  const on = S.settings[key];
+  btn.className = `w-12 h-6 rounded-full ${on?'bg-brand-600':'bg-gray-300 dark:bg-gray-700'} relative transition`;
+  btn.innerHTML = `<span class="absolute top-0.5 ${on?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>`;
+  saveState();
+  toast(`${key} ${on?'enabled':'disabled'}`, 'info');
+}
+function toggle2FA(btn) {
+  const u = me();
+  u.twoFA = !u.twoFA;
+  btn.className = `w-12 h-6 rounded-full ${u.twoFA?'bg-emerald-500':'bg-gray-300 dark:bg-gray-700'} relative transition`;
+  btn.innerHTML = `<span class="absolute top-0.5 ${u.twoFA?'left-6':'left-0.5'} w-5 h-5 rounded-full bg-white transition-all"></span>`;
+  saveState();
+  toast(`2FA ${u.twoFA?'enabled 🔒':'disabled'}`, u.twoFA ? 'success' : 'info');
+}
+function openPasswordChange() { $('pw-modal').classList.remove('hidden'); $('pw-modal').classList.add('flex'); $('pw-old').value=''; $('pw-new').value=''; $('pw-new2').value=''; }
+async function changePassword(e) {
+  e.preventDefault();
+  const u = me();
+  if (!u?.email) return toast('Please sign in again before changing your password.', 'error');
+  const oldPassword = $('pw-old').value;
+  const n = $('pw-new').value;
+  if (n.length < 8) return toast('Use a password of at least 8 characters.', 'error');
+  if (n !== $('pw-new2').value) return toast('Passwords do not match', 'error');
+  try {
+    const client = getSupabase();
+    const { error: verifyError } = await client.auth.signInWithPassword({ email: u.email, password: oldPassword });
+    if (verifyError) throw verifyError;
+    const { error } = await client.auth.updateUser({ password: n });
+    if (error) throw error;
+    $('pw-modal').classList.add('hidden'); $('pw-modal').classList.remove('flex');
+    toast('Password updated securely.', 'success');
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  }
+}
+function openRecovery() {
+  const u = me();
+  const html = `<div class="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm hidden items-center justify-center p-4" id="rc-sheet">
+    <div class="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-5 fade-up">
+      <div class="flex justify-between items-center mb-4"><h2 class="font-black text-base">Recovery Email</h2><button onclick="this.closest('#rc-sheet').remove()" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="space-y-3">
+        <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-[11px] text-emerald-700 dark:text-emerald-400"><i class="fa-solid fa-shield-halved mr-1"></i> Add a recovery email so you can always restore access.</div>
+        <input id="rc-set-email" value="${esc(u.recoveryEmail||'')}" type="email" placeholder="backup@email.com" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+        <button onclick="saveRecovery()" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm">Save Recovery Email</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { $('rc-sheet').classList.remove('hidden'); $('rc-sheet').classList.add('flex'); }, 10);
+}
+function saveRecovery() {
+  const u = me();
+  u.recoveryEmail = $('rc-set-email').value.trim();
+  saveState();
+  $('rc-sheet').remove();
+  toast('Recovery email saved', 'success');
+  renderSettingsSub('security');
+}
+function openBlockPicker() {
+  const u = me();
+  const others = S.users.filter(x => x.id !== S.currentUserId && !(u.blocked||[]).includes(x.id));
+  const html = `<div class="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm hidden items-end justify-center" id="bp-sheet">
+    <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl slide-up max-h-[70vh] flex flex-col">
+      <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center"><h3 class="font-black text-sm">Block a contact</h3><button onclick="this.closest('#bp-sheet').remove()" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="overflow-y-auto sb divide-y divide-gray-100 dark:divide-gray-800">
+        ${others.length ? others.map(x => `<button onclick="blockUser('${x.id}')" class="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-left">
+          <img src="${esc(x.avatar)}" class="w-10 h-10 rounded-full object-cover">
+          <span class="font-semibold text-sm">${esc(x.name)}</span>
+          <i class="fa-solid fa-ban ml-auto text-red-500"></i>
+        </button>`).join('') : '<p class="p-6 text-center text-xs text-gray-400">All contacts are already blocked</p>'}
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { $('bp-sheet').classList.remove('hidden'); $('bp-sheet').classList.add('flex'); }, 10);
+}
+function blockUser(id) {
+  const u = me();
+  if (!u.blocked) u.blocked = [];
+  if (!u.blocked.includes(id)) u.blocked.push(id);
+  saveState();
+  $('bp-sheet')?.remove();
+  renderSettingsSub('blocked');
+  toast(`${userById(id)?.name} blocked`, 'info');
+}
+function unblockUser(id) {
+  const u = me();
+  u.blocked = (u.blocked||[]).filter(x => x !== id);
+  saveState();
+  renderSettingsSub('blocked');
+  toast('Unblocked', 'success');
+}
+function clearCache() { if (!confirm('Clear temporary cache? Your data stays safe.')) return; toast('Cache cleared ✨', 'success'); }
+function exportData() {
+  const data = JSON.stringify(S, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `socialfreetext-backup-${Date.now()}.json`;
+  a.click();
+  toast('Backup downloaded', 'success');
+}
+function resetAll() {
+  if (!confirm('Erase ALL local data? This cannot be undone.')) return;
+  localStorage.removeItem('sft_v3');
+  location.reload();
+}
+
+/* ══════════ DELETE ACCOUNT ══════════ */
+function openDeleteAccount() {
+  $('delete-modal').classList.remove('hidden'); $('delete-modal').classList.add('flex');
+  $('del-confirm').value = ''; $('del-btn').disabled = true;
+  setTimeout(() => $('del-confirm').focus(), 200);
+}
+$('del-confirm')?.addEventListener('input', e => {
+  $('del-btn').disabled = e.target.value.trim().toUpperCase() !== 'DELETE';
+});
+function deleteAccount() {
+  if ($('del-confirm').value.trim().toUpperCase() !== 'DELETE') return;
+  const u = me();
+  if (!u) return;
+  S.users = S.users.filter(x => x.id !== u.id);
+  const myChatIds = S.chats.filter(c => c.type === 'dm' && c.userId === u.id).map(c => c.id);
+  S.chats = S.chats.filter(c => {
+    if (c.type === 'dm' && c.userId === u.id) return false;
+    if (c.type === 'group') {
+      c.memberIds = (c.memberIds||[]).filter(id => id !== u.id);
+      c.admins = (c.admins||[]).filter(id => id !== u.id);
+      if (c.memberIds.length === 0) return false;
+    }
+    return true;
+  });
+  myChatIds.forEach(id => delete S.messages[id]);
+  S.statuses = S.statuses.filter(s => s.userId !== u.id);
+  S.calls = S.calls.filter(c => c.userId !== u.id);
+  S.notifications = [];
+  S.communities = S.communities.filter(c => !(c.createdBy === u.id && c.admins.length <= 1));
+  S.logs.unshift(`[${new Date().toLocaleTimeString()}] [auth] account deleted @${u.username}`);
+  S.currentUserId = null;
+  saveState();
+  $('delete-modal').classList.add('hidden'); $('delete-modal').classList.remove('flex');
+  $('app').classList.add('hidden');
+  $('auth-screen').classList.remove('hidden');
+  showAuth('login');
+  toast('Account deleted. Goodbye 💔', 'info');
+}
+
+/* ══════════ ADMIN ══════════ */
+function renderAdmin() {
+  const u = me();
+  if (u.role !== 'Admin' && u.role !== 'Super Admin') { toast('Access restricted', 'error'); go('chats'); return; }
+  $('ad-users').textContent = S.users.length;
+  $('ad-msgs').textContent = Object.values(S.messages).reduce((a,m) => a+m.length, 0);
+  $('ad-ai').textContent = S.aiRequests || 0;
+  $('ad-flag').textContent = S.flags.length;
+  renderAdminUsers(); renderFlags(); renderLogs();
+}
+function adminTab(t) {
+  document.querySelectorAll('.asub').forEach(el => el.classList.add('hidden'));
+  $('ad-'+t+'-view').classList.remove('hidden');
+  document.querySelectorAll('.atab').forEach(b => {
+    const on = b.dataset.atab === t;
+    b.className = `atab px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap ${on?'bg-amber-500 text-gray-950':'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-500'}`;
+  });
+}
+function renderAdminUsers() {
+  const q = ($('ad-user-q')?.value || '').toLowerCase();
+  const list = S.users.filter(u => !q || u.name.toLowerCase().includes(q) || u.username.includes(q) || u.email.includes(q));
+  $('ad-user-table').innerHTML = list.map(u => {
+    const roleColor = u.role === 'Super Admin' ? 'bg-amber-500/20 text-amber-500' : u.role === 'Admin' ? 'bg-red-500/20 text-red-500' : u.role === 'Creator' ? 'bg-purple-500/20 text-purple-500' : 'bg-gray-500/20 text-gray-400';
+    return `<div class="p-3 flex items-center gap-3">
+      <img src="${esc(u.avatar)}" class="w-10 h-10 rounded-full object-cover">
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-sm truncate">${esc(u.name)} ${u.verified?'<i class="fa-solid fa-circle-check text-brand-500 text-[10px]"></i>':''}</p>
+        <p class="text-[10px] text-gray-400 truncate">@${esc(u.username)} · ${esc(u.email)}</p>
+      </div>
+      <span class="px-2 py-1 rounded-lg ${roleColor} text-[10px] font-bold">${esc(u.role)}</span>
+      <div class="flex gap-1">
+        <button onclick="cycleRole('${u.id}')" class="w-7 h-7 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-500"><i class="fa-solid fa-user-shield text-[10px]"></i></button>
+        <button onclick="deleteUser('${u.id}')" class="w-7 h-7 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/40 hover:text-red-500"><i class="fa-solid fa-trash text-[10px]"></i></button>
+      </div>
+    </div>`;
+  }).join('') || '<p class="p-6 text-center text-xs text-gray-400">No users</p>';
+}
+function cycleRole(id) {
+  const u = userById(id);
+  if (!u) return;
+  if (u.id === S.currentUserId && u.role === 'Super Admin') return toast("Can't demote yourself", 'error');
+  const order = ['User','Creator','Admin','Super Admin'];
+  u.role = order[(order.indexOf(u.role)+1) % order.length];
+  saveState(); renderAdminUsers();
+  toast(`${u.name} → ${u.role}`, 'success');
+}
+function deleteUser(id) {
+  const u = userById(id);
+  if (!u || u.id === S.currentUserId) return toast("Can't delete yourself", 'error');
+  if (!confirm(`Delete ${u.name}?`)) return;
+  S.users = S.users.filter(x => x.id !== id);
+  saveState(); renderAdminUsers();
+  toast(`${u.name} deleted`, 'error');
+}
+function renderFlags() {
+  $('ad-flag-list').innerHTML = S.flags.length ? S.flags.map(f => `<div class="p-3 flex items-start gap-3">
+    <div class="w-9 h-9 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center shrink-0"><i class="fa-solid fa-flag text-xs"></i></div>
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2 flex-wrap"><span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${f.severity==='high'?'bg-red-500/20 text-red-500':'bg-amber-500/20 text-amber-500'}">${f.severity}</span><span class="text-[10px] text-gray-400">${f.type} · ${f.by}</span></div>
+      <p class="text-xs mt-1.5">${esc(f.preview)}</p>
+    </div>
+    <div class="flex gap-1 shrink-0">
+      <button onclick="resolveFlag('${f.id}','approve')" class="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">Approve</button>
+      <button onclick="resolveFlag('${f.id}','delete')" class="px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-[10px] font-bold">Delete</button>
+    </div>
+  </div>`).join('') : '<p class="p-6 text-center text-xs text-gray-400">No flagged content 🎉</p>';
+}
+function resolveFlag(id, action) {
+  S.flags = S.flags.filter(f => f.id !== id);
+  S.logs.unshift(`[${new Date().toLocaleTimeString()}] [mod] ${action} flag ${id}`);
+  saveState(); renderFlags(); renderAdmin();
+  toast(`Flag ${action === 'approve' ? 'approved' : 'removed'}`, action === 'approve' ? 'success' : 'error');
+}
+function renderLogs() {
+  $('ad-logs').innerHTML = S.logs.slice(0,50).map(l => `<p class="hover:text-emerald-500 transition">${esc(l)}</p>`).join('');
+}
+function sendBroadcast() {
+  const msg = $('ad-bcast').value.trim();
+  if (!msg) return toast('Write a message', 'error');
+  S.users.forEach(u => { S.notifications.push({ id:'n'+uid(), icon:'fa-bullhorn', color:'text-amber-500', text:`<b>BOI Broadcast:</b> ${esc(msg)}`, at:now(), read:false }); });
+  S.logs.unshift(`[${new Date().toLocaleTimeString()}] [bc] Broadcast: "${msg.slice(0,60)}"`);
+  saveState(); $('ad-bcast').value = '';
+  toast(`Broadcast sent to ${S.users.length} users`, 'success');
+}
+
+/* ══════════ UTILITY / INIT ══════════ */
+function openModal(id) { const el = $(id); if (!el) return; el.classList.remove('hidden'); el.classList.add('flex'); }
+function closeModal(id) { const el = $(id); if (!el) return; el.classList.add('hidden'); el.classList.remove('flex'); }
+
+async function init() {
+  applyTheme();
+  // Local demo sessions are intentionally not trusted for authentication anymore.
+  S.currentUserId = null;
+  $('auth-screen').classList.remove('hidden');
+  $('app').classList.add('hidden');
+  showAuth('login');
+  if (location.hash === '#admin') { openAdminLogin(); return; }
+  try {
+    const client = getSupabase();
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+    if (data.session?.user) {
+      await loadAuthenticatedProfile(data.session.user);
+      saveState();
+      $('auth-screen').classList.add('hidden');
+      $('app').classList.remove('hidden');
+      initUI();
+    }
+  } catch (error) {
+    // Keep the login screen visible while configuration is incomplete.
+    console.warn('SocialfreeText Supabase setup:', error.message);
+  }
+}
+
+// ══════════ SPLASH SCREEN LOGIC ══════════
+// Waits for all assets (Tailwind, FontAwesome, fonts) to load first
+// Then keeps the splash visible for 1.5 seconds before fading out
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const loader = $('loader');
+    loader.style.opacity = '0';
+    // After fade transition completes (700ms), hide loader and init app
+    setTimeout(() => {
+      loader.classList.add('hidden');
+      loader.style.opacity = '';
+      init();
+      window.addEventListener('hashchange', checkAdminHash);
+    }, 700);
+  }, 1500); // ← Change this to 2500 if you want it slower, or 800 for faster
+});
+
+// Sidebar / mobile nav
+$('burger')?.addEventListener('click', () => {
+  $('sidebar').classList.toggle('-translate-x-full');
+  $('sb-overlay').classList.toggle('hidden');
+});
+$('sb-overlay')?.addEventListener('click', () => {
+  $('sidebar').classList.add('-translate-x-full');
+  $('sb-overlay').classList.add('hidden');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#notif-panel') && !e.target.closest('button[onclick*="toggleNotif"]')) {
+    $('notif-panel')?.classList.add('hidden');
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (!$('call-scr').classList.contains('hidden')) endCall();
+    else if (!$('story-scr').classList.contains('hidden')) closeStory();
+  }
+});
+</script>
+</body>
+</html>
