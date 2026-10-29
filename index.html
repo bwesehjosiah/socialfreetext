@@ -320,6 +320,18 @@ tailwind.config = {
         </div>
       </section>
 
+      <!-- PEOPLE / CONNECTIONS -->
+      <section id="v-people" class="view hidden max-w-3xl mx-auto p-3 space-y-4">
+        <div><h1 class="text-xl font-black">People</h1><p class="text-xs text-gray-500 mt-1">Discover people you may know and connect to start chatting.</p></div>
+        <div class="flex gap-2">
+          <button id="people-tab-discover" onclick="showPeopleTab('discover')" class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-600 text-white">Discover people</button>
+          <button id="people-tab-requests" onclick="showPeopleTab('requests')" class="px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-800">Requests <span id="people-request-count"></span></button>
+          <button id="people-tab-connected" onclick="showPeopleTab('connected')" class="px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-800">Connected</button>
+        </div>
+        <div class="relative"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i><input id="people-search" oninput="renderPeople()" type="search" placeholder="Search registered people by name or username" class="w-full pl-9 pr-3 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"></div>
+        <div id="people-list" class="space-y-2"><div class="p-6 text-center text-xs text-gray-500">Loading people…</div></div>
+      </section>
+
       <!-- ═══ STATUS ═══ -->
       <section id="v-status" class="view hidden max-w-2xl mx-auto p-3 space-y-4">
         <div class="flex items-center justify-between">
