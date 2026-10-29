@@ -447,7 +447,7 @@ tailwind.config = {
       <!-- ═══ PROFILE ═══ -->
       <section id="v-profile" class="view hidden max-w-2xl mx-auto p-3 space-y-4">
         <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <div class="h-28 bg-gradient-to-r from-brand-600 via-purple-600 to-pink-500 relative">
+          <div id="pr-cover" class="h-28 bg-gradient-to-r from-brand-600 via-purple-600 to-pink-500 bg-cover bg-center relative">
             <button onclick="editProfile()" class="absolute bottom-2 right-2 px-3 py-1.5 rounded-xl bg-black/40 backdrop-blur text-white text-[11px] font-bold">
               <i class="fa-solid fa-pen mr-1"></i> Edit
             </button>
@@ -2120,6 +2120,7 @@ function clearAi() { S.aiHistory = [AI_GREETING]; saveState(); renderAiStream();
 function renderProfile() {
   const u = me();
   $('pr-av').src = u.avatar;
+  const cover = $('pr-cover'); if (cover) { cover.style.backgroundImage = u.cover ? `url('${String(u.cover).replace(/'/g, '%27')}')` : ''; cover.classList.toggle('bg-gradient-to-r', !u.cover); }
   $('pr-name').textContent = u.name;
   $('pr-badge').classList.toggle('hidden', !u.verified);
   $('pr-handle').textContent = '@' + u.username;
@@ -2128,6 +2129,7 @@ function renderProfile() {
   $('pr-status').textContent = u.status === 'active' ? 'Active' : u.status;
   $('pr-followers').textContent = (u.followers||0).toLocaleString();
   $('pr-following').textContent = (u.following||0).toLocaleString();
+  loadFollowCounts().catch(e=>console.warn('Follow counts:',e.message));
 }
 function editProfile() {
   const u = me();
