@@ -171,6 +171,22 @@ tailwind.config = {
         </div>
       </form>
 
+      <!-- Password reset: shown only after a valid recovery link is opened -->
+      <form id="form-new-password" class="space-y-3 hidden">
+        <div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 text-[11px] text-indigo-700 dark:text-indigo-300">
+          <i class="fa-solid fa-shield-halved mr-1"></i> Choose a new password for your SocialfreeText account.
+        </div>
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">NEW PASSWORD</label>
+          <input id="reset-new-pw" type="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">CONFIRM NEW PASSWORD</label>
+          <input id="reset-confirm-pw" type="password" required minlength="8" autocomplete="new-password" placeholder="Enter the new password again" class="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <button type="submit" class="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm">Update Password</button>
+      </form>
+
       <p class="text-center text-[10px] text-gray-500 mt-6 leading-relaxed">
         By continuing you agree to our <a href="#" class="text-brand-500 underline">Terms</a> and <a href="#" class="text-brand-500 underline">Privacy Policy</a>.
       </p>
@@ -986,9 +1002,10 @@ function showAuth(view) {
   document.querySelectorAll('#auth-screen form').forEach(f => f.classList.add('hidden'));
   if (view === 'signup') $('form-signup').classList.remove('hidden');
   else if (view === 'recovery') $('form-recovery').classList.remove('hidden');
+  else if (view === 'new-password') $('form-new-password').classList.remove('hidden');
   else $('form-login').classList.remove('hidden');
   const sub = $('auth-sub');
-  if (sub) sub.textContent = view === 'signup' ? 'Create your free account' : view === 'recovery' ? 'Recover your account' : 'Sign in to continue';
+  if (sub) sub.textContent = view === 'signup' ? 'Create your free account' : view === 'recovery' ? 'Recover your account' : view === 'new-password' ? 'Choose a new secure password' : 'Sign in to continue';
 }
 // Supabase browser configuration. Replace these placeholders with your project's URL and
 // publishable (or legacy anon) key. Never use a secret/service_role key in browser code.
@@ -1116,6 +1133,31 @@ $('form-recovery').addEventListener('submit', async e => {
     showAuth('login');
   } catch (error) {
     toast(authErrorMessage(error), 'error');
+  }
+});
+
+$('form-new-password').addEventListener('submit', async e => {
+  e.preventDefault();
+  const password = $('reset-new-pw').value;
+  const confirmation = $('reset-confirm-pw').value;
+  if (password.length < 8) return toast('Use a password of at least 8 characters.', 'error');
+  if (password !== confirmation) return toast('The passwords do not match.', 'error');
+  const button = $('form-new-password').querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Updating password…'; }
+  try {
+    const client = getSupabase();
+    const { error } = await client.auth.updateUser({ password });
+    if (error) throw error;
+    await client.auth.signOut();
+    history.replaceState(null, '', location.pathname + location.search);
+    $('reset-new-pw').value = '';
+    $('reset-confirm-pw').value = '';
+    showAuth('login');
+    toast('Password updated successfully. Sign in with your new password.', 'success');
+  } catch (error) {
+    toast(authErrorMessage(error), 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Update Password'; }
   }
 });
 
@@ -2683,6 +2725,7 @@ async function init() {
   // Detect Supabase's email-confirmation callback before its URL fragment is cleared.
   const callbackParams = new URLSearchParams(location.hash.replace(/^#/, ''));
   const emailWasVerified = callbackParams.get('type') === 'signup' || callbackParams.get('type') === 'email';
+  const isPasswordRecovery = callbackParams.get('type') === 'recovery';
   // Local demo sessions are intentionally not trusted for authentication anymore.
   S.currentUserId = null;
   $('auth-screen').classList.remove('hidden');
@@ -2693,6 +2736,13 @@ async function init() {
     const client = getSupabase();
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
+    if (isPasswordRecovery) {
+      if (!data.session) throw new Error('This password reset link is invalid or expired. Request a new one.');
+      $('auth-screen').classList.remove('hidden');
+      $('app').classList.add('hidden');
+      showAuth('new-password');
+      return;
+    }
     if (emailWasVerified) {
       // Keep the user on the login screen after confirmation rather than auto-entering the app.
       await client.auth.signOut();
