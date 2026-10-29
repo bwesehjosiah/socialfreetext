@@ -257,6 +257,10 @@ tailwind.config = {
         <button onclick="markRead()" class="text-[10px] font-bold text-brand-500">Mark read</button>
       </div>
       <div id="notif-list" class="max-h-80 overflow-y-auto sb divide-y divide-gray-100 dark:divide-gray-800/60"></div>
+      <div class="p-3 border-t border-gray-100 dark:border-gray-800">
+        <button id="push-enable-btn" onclick="enablePushNotifications()" class="w-full rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold py-2.5 px-3"><i class="fa-solid fa-bell mr-2"></i>Enable push notifications</button>
+        <p id="push-status" class="text-[10px] text-gray-500 mt-2">Get alerts when SocialfreeText is in the background. Browser and device support varies.</p>
+      </div>
     </div>
 
     <!-- SIDEBAR -->
@@ -2346,6 +2350,37 @@ function renderNotifs() {
     ${!n.read ? '<span class="w-2 h-2 rounded-full bg-brand-500 shrink-0 mt-2"></span>' : ''}
   </div>`).join('') : '<p class="p-6 text-center text-xs text-gray-400">No notifications</p>';
 }
+let sftPushRegistration=null;
+async function setupPushServiceWorker(){
+ if(!('serviceWorker'in navigator))return null;
+ try{sftPushRegistration=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;return sftPushRegistration}
+ catch(e){console.warn('Push service worker unavailable:',e);return null}
+}
+async function enablePushNotifications(){
+ const status=$('push-status'),btn=$('push-enable-btn');
+ try{
+  if(!('Notification'in window)||!('serviceWorker'in navigator)||!('PushManager'in window)){status.textContent='Push notifications are not supported by this browser.';return}
+  if(location.protocol!=='https:'&&location.hostname!=='localhost'){status.textContent='Push notifications require HTTPS.';return}
+  btn.disabled=true;btn.textContent='Enabling…';
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted'){status.textContent='Notifications are blocked. Enable them in your browser or phone settings.';return}
+  const reg=await setupPushServiceWorker();
+  if(!reg){status.textContent='Could not register notification service worker. Refresh and try again.';return}
+  const existing=await reg.pushManager.getSubscription();
+  if(existing){
+   const {error}=await getSupabase().from('push_subscriptions').upsert({user_id:S.currentUserId,endpoint:existing.endpoint,subscription:existing.toJSON(),user_agent:navigator.userAgent,updated_at:new Date().toISOString()},{onConflict:'endpoint'});
+   if(error)throw error;
+   status.textContent='Push permission enabled and this device is registered. Background delivery requires the push sender to be configured.';
+  }else{
+   status.textContent='Notification permission is enabled. To receive push alerts, the server needs its VAPID public/private keys configured.';
+  }
+ }catch(e){console.error(e);status.textContent='Could not enable notifications: '+(e.message||'Please try again.')}
+ finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-bell mr-2"></i>Enable push notifications'}
+}
+async function syncExistingPushSubscription(){
+ if(!S.currentUserId||!('serviceWorker'in navigator)||!('PushManager'in window))return;
+ try{const reg=await setupPushServiceWorker(),sub=await reg?.pushManager.getSubscription();if(sub){const {error}=await getSupabase().from('push_subscriptions').upsert({user_id:S.currentUserId,endpoint:sub.endpoint,subscription:sub.toJSON(),user_agent:navigator.userAgent,updated_at:new Date().toISOString()},{onConflict:'endpoint'});if(error)console.warn('Could not sync push subscription:',error.message)}}catch(e){console.warn('Push subscription sync failed:',e.message)}
+}
 function toggleNotif() { $('notif-panel').classList.toggle('hidden'); }
 function markRead() { S.notifications.forEach(n => n.read = true); saveState(); renderNotifs(); toast('Marked as read', 'success'); }
 
@@ -2947,6 +2982,7 @@ $('sb-overlay')?.addEventListener('click', () => {
   $('sidebar').classList.add('-translate-x-full');
   $('sb-overlay').classList.add('hidden');
 });
+if('serviceWorker'in navigator)window.addEventListener('load',()=>setupPushServiceWorker());
 document.addEventListener('click', e => {
   if (!e.target.closest('#notif-panel') && !e.target.closest('button[onclick*="toggleNotif"]')) {
     $('notif-panel')?.classList.add('hidden');
