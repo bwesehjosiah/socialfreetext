@@ -480,8 +480,8 @@ tailwind.config = {
             <p id="pr-bio" class="text-sm mt-3 leading-relaxed">—</p>
             <div class="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
               <div class="text-center">
-                <p id="pr-posts" class="text-lg font-black">0</p>
-                <p class="text-[10px] text-gray-500">Posts</p>
+                <p id="pr-connections" class="text-lg font-black">0</p>
+                <p class="text-[10px] text-gray-500">Connections</p>
               </div>
               <div class="text-center">
                 <p id="pr-followers" class="text-lg font-black">0</p>
@@ -1837,7 +1837,7 @@ async function encryptDM(otherId,text){const key=await deriveDMKey(otherId),iv=c
 async function decryptDM(otherId,body){if(!String(body).startsWith('e2ee:'))return body;const key=await deriveDMKey(otherId),p=JSON.parse(body.slice(5));const data=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)},key,new Uint8Array(p.data));return new TextDecoder().decode(data);}
 function liveConnected(id){return peopleRequests.some(r=>r.status==='accepted'&&((r.requester_id===S.currentUserId&&r.recipient_id===id)||(r.recipient_id===S.currentUserId&&r.requester_id===id)));}
 function subscribeLivePresence(){const client=getSupabase();if(livePresenceChannel)client.removeChannel(livePresenceChannel);livePresenceChannel=client.channel('sft-presence',{config:{presence:{key:S.currentUserId}}});livePresenceChannel.on('presence',{event:'sync'},()=>{liveOnlineIds=new Set(Object.keys(livePresenceChannel.presenceState()));updateLiveStatusUI()}).on('presence',{event:'join'},updateLiveStatusUI).on('presence',{event:'leave'},updateLiveStatusUI).subscribe(status=>{if(status==='SUBSCRIBED')livePresenceChannel.track({online_at:new Date().toISOString()})});}
-function updateLiveStatusUI(){if(activeChat){const c=chatById(activeChat),sub=document.querySelector('.live-status-text'),dot=document.querySelector('.live-status-dot');if(c?.type==='dm'){if(sub)sub.textContent=liveOnlineIds.has(c.userId)?'Online':'Offline';if(dot)dot.className='live-status-dot w-1.5 h-1.5 rounded-full '+(liveOnlineIds.has(c.userId)?'bg-emerald-500':'bg-gray-400')}}renderChats();}
+function updateLiveStatusUI(){renderPeople();if(activeChat){const c=chatById(activeChat),sub=document.querySelector('.live-status-text'),dot=document.querySelector('.live-status-dot');if(c?.type==='dm'){if(sub)sub.textContent=liveOnlineIds.has(c.userId)?'Online':'Offline';if(dot)dot.className='live-status-dot w-1.5 h-1.5 rounded-full '+(liveOnlineIds.has(c.userId)?'bg-emerald-500':'bg-gray-400')}}renderChats();}
 async function loadPersistedDM(chatId){const c=chatById(chatId);if(!c||c.type!=='dm')return;const meId=S.currentUserId,other=c.userId;const {data,error}=await getSupabase().from('messages').select('id,sender_id,recipient_id,body,created_at,read_at').or('and(sender_id.eq.'+meId+',recipient_id.eq.'+other+'),and(sender_id.eq.'+other+',recipient_id.eq.'+meId+')').order('created_at',{ascending:true}).limit(300);if(error){console.warn(error.message);return}const rows=[];for(const m of data||[]){let body,kind='text',duration='0:03';try{body=await decryptDM(m.sender_id===meId?m.recipient_id:m.sender_id,m.body);if(String(body).startsWith('{')){const parsed=JSON.parse(body);if(parsed.kind==='voice'){kind='voice';duration=parsed.duration||duration;body=parsed.url}}}catch{body='🔒 Could not decrypt on this device'}rows.push({id:m.id,from:m.sender_id,type:kind,text:body,dur:duration,at:new Date(m.created_at).getTime(),read:!!m.read_at,remote:true});liveSeenIds.add('m:'+m.id)}S.messages[chatId]=rows;renderMsgs();renderChats();}
 async function receiveLiveDM(m){if(!m?.id||liveSeenIds.has('m:'+m.id))return;liveSeenIds.add('m:'+m.id);const other=m.sender_id===S.currentUserId?m.recipient_id:m.sender_id;let body,kind='text',duration='0:03';try{body=await decryptDM(other,m.body);if(String(body).startsWith('{')){const parsed=JSON.parse(body);if(parsed.kind==='voice'){kind='voice';duration=parsed.duration||duration;body=parsed.url}}}catch{body='🔒 Could not decrypt on this device'}let c=S.chats.find(x=>x.type==='dm'&&x.userId===other);if(!c){await loadPeople().catch(()=>{});const p=peopleProfiles.find(x=>x.id===other);if(!p)return;c={id:'dm_'+other,type:'dm',userId:other,lastMsg:'',lastTime:Date.now(),unread:0};S.chats.push(c);S.messages[c.id]=[];S.users=S.users.filter(u=>u.id!==other);S.users.push({id:p.id,name:p.display_name||p.username,username:p.username,email:'',bio:p.bio||'',avatar:p.avatar_url||IMG_POOL[0],role:'User',status:'active'})}const msgs=S.messages[c.id]||(S.messages[c.id]=[]);if(!msgs.some(x=>x.id===m.id))msgs.push({id:m.id,from:m.sender_id,type:kind,text:body,dur:duration,at:new Date(m.created_at).getTime(),remote:true});c.lastMsg=body;c.lastTime=new Date(m.created_at).getTime();if(activeChat===c.id){renderMsgs();if(m.sender_id!==S.currentUserId)markDMRead(c.id)}else if(m.sender_id!==S.currentUserId){c.unread=(c.unread||0)+1;toast('New message from '+(userById(other)?.name||'your connection'),'success');if(S.settings.sounds)beep()}saveState();renderChats();}
 function subscribeLiveMessages(){const client=getSupabase();if(liveMessageChannel)client.removeChannel(liveMessageChannel);liveMessageChannel=client.channel('sft-messages-'+S.currentUserId).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:'recipient_id=eq.'+S.currentUserId},e=>receiveLiveDM(e.new)).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:'sender_id=eq.'+S.currentUserId},e=>receiveLiveDM(e.new)).on('postgres_changes',{event:'UPDATE',schema:'public',table:'messages',filter:'sender_id=eq.'+S.currentUserId},e=>{const m=e.new;if(!m?.id||!m.read_at)return;for(const rows of Object.values(S.messages)){const item=rows.find(x=>x.id===m.id);if(item)item.read=true}renderMsgs();}).subscribe();}
@@ -2426,6 +2426,7 @@ function renderProfile() {
   $('pr-followers').textContent = (u.followers||0).toLocaleString();
   $('pr-following').textContent = (u.following||0).toLocaleString();
   loadFollowCounts().catch(e=>console.warn('Follow counts:',e.message));
+  loadConnectionCount().catch(e=>console.warn('Connection count:',e.message));
 }
 function editProfile() {
   const u = me();
@@ -2449,6 +2450,7 @@ function editProfile() {
   document.body.insertAdjacentHTML('beforeend', html);
   setTimeout(() => { $('ep-sheet').classList.remove('hidden'); $('ep-sheet').classList.add('flex'); }, 10);
   setTimeout(() => $('ep-av-url').addEventListener('input', e => $('ep-preview').src = e.target.value), 30);
+  setTimeout(() => $('ep-avatar-file')?.addEventListener('change', e => {const file=e.target.files?.[0];if(file)$('ep-preview').src=URL.createObjectURL(file)}), 30);
 }
 async function uploadProfileImage(file, kind) {
   if (!file) return null;
@@ -2905,6 +2907,12 @@ async function changePassword(e) {
   } catch (error) {
     toast(authErrorMessage(error), 'error');
   }
+}
+async function loadConnectionCount() {
+  const id=S.currentUserId;if(!id)return;
+  const {count,error}=await getSupabase().from('connection_requests').select('id',{count:'exact',head:true}).eq('status','accepted').or('requester_id.eq.'+id+',recipient_id.eq.'+id);
+  if(error)throw error;
+  const el=$('pr-connections');if(el)el.textContent=String(count||0);
 }
 function openRecovery() {
   const u = me();
