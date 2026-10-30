@@ -829,6 +829,30 @@ tailwind.config = {
   </div>
 </div>
 
+<!-- ══════════ ENCRYPTED MESSAGE RECOVERY MODAL ══════════ -->
+<div id="e2ee-recovery-modal" class="fixed inset-0 z-[195] bg-black/85 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-5 fade-up">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-black text-base">Encrypted Message Recovery</h2>
+      <button onclick="closeModal('e2ee-recovery-modal')" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <p id="e2ee-recovery-help" class="text-xs text-gray-500 mb-3">Create a recovery key to protect a backup of your private messaging key.</p>
+    <div id="e2ee-recovery-key-wrap" class="hidden">
+      <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">YOUR ONE-TIME RECOVERY KEY</label>
+      <textarea id="e2ee-recovery-key-display" readonly rows="3" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-mono break-all"></textarea>
+      <button onclick="copyE2EERecoveryKey()" class="w-full mt-2 py-2.5 rounded-xl bg-brand-600 text-white text-xs font-bold"><i class="fa-solid fa-copy mr-1"></i>Copy recovery key</button>
+      <p class="text-[11px] text-amber-600 dark:text-amber-400 mt-3">Save this key somewhere private and safe. SocialfreeText cannot recover it if you lose it. Anyone with this key and your account access may be able to restore your encrypted messages.</p>
+      <label class="flex items-start gap-2 text-xs mt-3"><input id="e2ee-recovery-confirm-saved" type="checkbox" class="mt-0.5"><span>I have saved my recovery key somewhere safe.</span></label>
+      <button onclick="confirmE2EERecoverySaved()" class="w-full mt-3 py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold">I've saved my recovery key</button>
+    </div>
+    <div id="e2ee-recovery-restore-wrap" class="hidden">
+      <label for="e2ee-recovery-key-input" class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">ENTER YOUR RECOVERY KEY</label>
+      <textarea id="e2ee-recovery-key-input" rows="3" autocomplete="off" spellcheck="false" placeholder="Paste your saved recovery key here" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-mono"></textarea>
+      <button onclick="restoreE2EERecoveryBackup()" class="w-full mt-3 py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">Restore encrypted messages</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════ DELETE ACCOUNT MODAL ══════════ -->
 <div id="delete-modal" class="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm hidden items-center justify-center p-4">
   <div class="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-5 fade-up border border-red-200 dark:border-red-900/40">
@@ -1644,12 +1668,92 @@ function renderMsgs() {
 let livePresenceChannel=null, liveMessageChannel=null, liveCallChannel=null, livePeer=null, liveLocalStream=null, liveCallPeerId=null, liveCallKind='audio', liveIncoming=false, liveOnlineIds=new Set(), liveSeenIds=new Set(), pendingLiveIce=[];
 let dmTypingChannel=null, dmTypingTimer=null, dmTypingHideTimer=null, dmTypingPeer=null, dmTypingLastSent=0;
 const liveKeyCache=new Map();
+let e2eeRestoreRequired=false;
+function e2eeBase64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function e2eeFromBase64Url(value){const s=String(value).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(s+'='.repeat((4-s.length%4)%4));return Uint8Array.from(raw,ch=>ch.charCodeAt(0))}
+async function deriveE2EEBackupKey(recoveryKey,salt){
+ const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(recoveryKey),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations:600000},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+function openE2EERecovery(){
+ $('e2ee-recovery-key-wrap').classList.add('hidden');
+ $('e2ee-recovery-restore-wrap').classList.add('hidden');
+ $('e2ee-recovery-help').textContent='Create a recovery key on this device, or restore your existing encrypted message key on a new device.';
+ $('e2ee-recovery-key-display').value='';
+ $('e2ee-recovery-key-input').value='';
+ $('e2ee-recovery-confirm-saved').checked=false;
+ $('e2ee-recovery-modal').classList.remove('hidden');$('e2ee-recovery-modal').classList.add('flex');
+ getSupabase().from('e2ee_key_backups').select('user_id').eq('user_id',S.currentUserId).maybeSingle().then(({data,error})=>{
+   if(error){toast('Could not check recovery backup: '+error.message,'error');return}
+   if(data){$('e2ee-recovery-restore-wrap').classList.remove('hidden');$('e2ee-recovery-help').textContent='This account has an encrypted key backup. Enter the recovery key you saved when you created it.'}
+   else{$('e2ee-recovery-help').textContent='Create a recovery key on this device before switching phones or clearing app data.'}
+ }).catch(e=>toast(e.message,'error'));
+}
+async function createE2EERecoveryBackup(){
+ try{
+  const uid=S.currentUserId;if(!uid)throw new Error('Sign in first.');
+  await ensureE2EEKeys(uid);
+  const saved=JSON.parse(localStorage.getItem('sft-e2ee-'+uid)||'null');
+  if(!saved?.privateKey||!saved?.publicKey)throw new Error('This device does not have an exportable messaging key to back up.');
+  const random=crypto.getRandomValues(new Uint8Array(32));
+  const recoveryKey=e2eeBase64Url(random),salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const wrappingKey=await deriveE2EEBackupKey(recoveryKey,salt);
+  const payload=new TextEncoder().encode(JSON.stringify({version:1,privateKey:saved.privateKey,publicKey:saved.publicKey}));
+  const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},wrappingKey,payload);
+  const backup={version:1,kdf:'PBKDF2-SHA-256',iterations:600000,salt:e2eeBase64Url(salt),iv:e2eeBase64Url(iv),ciphertext:e2eeBase64Url(new Uint8Array(encrypted))};
+  const {error}=await getSupabase().from('e2ee_key_backups').upsert({user_id:uid,backup},{onConflict:'user_id'});
+  if(error)throw error;
+  $('e2ee-recovery-key-display').value=recoveryKey;
+  $('e2ee-recovery-restore-wrap').classList.add('hidden');
+  $('e2ee-recovery-key-wrap').classList.remove('hidden');
+  $('e2ee-recovery-help').textContent='Your encrypted key backup is ready. Save this recovery key now; it will not be shown again.';
+ }catch(e){toast('Could not create recovery backup: '+e.message,'error')}
+}
+async function copyE2EERecoveryKey(){const value=$('e2ee-recovery-key-display').value;if(!value)return;try{await navigator.clipboard.writeText(value);toast('Recovery key copied. Save it somewhere safe.','success')}catch{ $('e2ee-recovery-key-display').focus();$('e2ee-recovery-key-display').select();toast('Select and copy the recovery key manually.','info')}}
+function confirmE2EERecoverySaved(){if(!$('e2ee-recovery-confirm-saved').checked)return toast('Please confirm that you saved your recovery key.','error');closeModal('e2ee-recovery-modal');toast('Encrypted message recovery is set up. Keep your recovery key safe.','success')}
+async function restoreE2EERecoveryBackup(){
+ try{
+  const uid=S.currentUserId,recoveryKey=$('e2ee-recovery-key-input').value.trim();
+  if(!uid||!recoveryKey)throw new Error('Enter your recovery key.');
+  const {data,error}=await getSupabase().from('e2ee_key_backups').select('backup').eq('user_id',uid).maybeSingle();
+  if(error)throw error;if(!data?.backup)throw new Error('No encrypted key backup exists for this account.');
+  const b=data.backup;if(b.version!==1||b.kdf!=='PBKDF2-SHA-256'||b.iterations!==600000)throw new Error('This recovery backup version is not supported.');
+  const wrappingKey=await deriveE2EEBackupKey(recoveryKey,e2eeFromBase64Url(b.salt));
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:e2eeFromBase64Url(b.iv)},wrappingKey,e2eeFromBase64Url(b.ciphertext));
+  const saved=JSON.parse(new TextDecoder().decode(plain));
+  if(saved.version!==1||!saved.privateKey||!saved.publicKey)throw new Error('The recovery backup is invalid.');
+  const privateKey=await crypto.subtle.importKey('jwk',saved.privateKey,{name:'ECDH',namedCurve:'P-256'},false,['deriveKey']);
+  const publicKey=await crypto.subtle.importKey('jwk',saved.publicKey,{name:'ECDH',namedCurve:'P-256'},true,[]);
+  localStorage.setItem('sft-e2ee-'+uid,JSON.stringify({privateKey:saved.privateKey,publicKey:saved.publicKey}));
+  liveKeyCache.set(uid,{privateKey,publicJwk:saved.publicKey});
+  const {error:profileError}=await getSupabase().from('profiles').update({e2ee_public_key:JSON.stringify(saved.publicKey)}).eq('id',uid);
+  if(profileError)throw profileError;
+  e2eeRestoreRequired=false;closeModal('e2ee-recovery-modal');
+  toast('Your encrypted message key has been restored on this device.','success');
+  if(activeChat)await loadPersistedDM(activeChat);
+ }catch(e){toast(e.name==='OperationError'?'That recovery key is incorrect or the backup is damaged.':e.message,'error')}
+}
+
 async function ensureE2EEKeys(userId){
  if(!window.crypto?.subtle)throw new Error('Secure encryption is unavailable.');
  let saved=null;try{saved=JSON.parse(localStorage.getItem('sft-e2ee-'+userId)||'null')}catch{}
  let privateKey,publicJwk;
- if(saved){privateKey=await crypto.subtle.importKey('jwk',saved.privateKey,{name:'ECDH',namedCurve:'P-256'},false,['deriveKey']);publicJwk=saved.publicKey;}
- else{const pair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveKey']);const priv=await crypto.subtle.exportKey('jwk',pair.privateKey);publicJwk=await crypto.subtle.exportKey('jwk',pair.publicKey);localStorage.setItem('sft-e2ee-'+userId,JSON.stringify({privateKey:priv,publicKey:publicJwk}));privateKey=await crypto.subtle.importKey('jwk',priv,{name:'ECDH',namedCurve:'P-256'},false,['deriveKey']);}
+ if(saved){
+  privateKey=await crypto.subtle.importKey('jwk',saved.privateKey,{name:'ECDH',namedCurve:'P-256'},false,['deriveKey']);publicJwk=saved.publicKey;
+ }else{
+  const client=getSupabase();
+  const [{data:profile,error:profileError},{data:backup,error:backupError}]=await Promise.all([
+   client.from('profiles').select('e2ee_public_key').eq('id',userId).maybeSingle(),
+   client.from('e2ee_key_backups').select('user_id').eq('user_id',userId).maybeSingle()
+  ]);
+  if(profileError)throw profileError;if(backupError)throw backupError;
+  if(backup){e2eeRestoreRequired=true;throw new Error('Your encrypted message key needs to be restored. Open Settings → Privacy & Security → Encrypted Message Recovery.');}
+  if(profile?.e2ee_public_key){e2eeRestoreRequired=true;throw new Error('This account already has a messaging key, but no recovery backup exists. Do not create a new key on this device; the original device may still have the key.');}
+  const pair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveKey']);
+  const priv=await crypto.subtle.exportKey('jwk',pair.privateKey);publicJwk=await crypto.subtle.exportKey('jwk',pair.publicKey);
+  localStorage.setItem('sft-e2ee-'+userId,JSON.stringify({privateKey:priv,publicKey:publicJwk}));
+  privateKey=await crypto.subtle.importKey('jwk',priv,{name:'ECDH',namedCurve:'P-256'},false,['deriveKey']);
+ }
  liveKeyCache.set(userId,{privateKey,publicJwk});
  const {error}=await getSupabase().from('profiles').update({e2ee_public_key:JSON.stringify(publicJwk)}).eq('id',userId);if(error)throw error;
 }
@@ -2464,6 +2568,13 @@ const SETTINGS_PANELS = {
     const u = me();
     return `
       <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+        <button onclick="openE2EERecovery()" class="set-row w-full">
+          <div class="flex items-center gap-3">
+            <div class="set-ico bg-indigo-500/10 text-indigo-500"><i class="fa-solid fa-lock"></i></div>
+            <div class="text-left"><p class="font-bold text-sm">Encrypted Message Recovery</p><p class="text-[11px] text-gray-500">Back up or restore your private message key</p></div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+        </button>
         <button onclick="openPasswordChange()" class="set-row w-full">
           <div class="flex items-center gap-3">
             <div class="set-ico bg-emerald-500/10 text-emerald-500"><i class="fa-solid fa-key"></i></div>
