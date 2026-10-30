@@ -1478,8 +1478,10 @@ window.receiveSFTNativeAction = function(payload) {
     if (action && action.type === 'reply' && action.senderId && action.text) {
       pendingSFTNativeAction = action;
       if (S.currentUserId && sftLiveChatsReady) processSFTNativeAction();
+      return true;
     }
   } catch (error) { console.warn('Could not read notification action:', error.message); }
+  return false;
 };
 async function processSFTNativeAction() {
   const action = pendingSFTNativeAction;
