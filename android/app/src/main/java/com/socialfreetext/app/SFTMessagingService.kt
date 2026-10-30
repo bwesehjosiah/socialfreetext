@@ -17,8 +17,7 @@ import com.google.firebase.messaging.RemoteMessage
 class SFTMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        // TODO: send token to the authenticated user's device_push_tokens record.
-        // Never log the token or ship server credentials in the Android app.
+        // MainActivity obtains the current token and registers it through the authenticated WebView session.
         getSharedPreferences("sft_push", Context.MODE_PRIVATE).edit().putString("fcm_token", token).apply()
     }
 
@@ -98,7 +97,6 @@ class SFTMessagingService : FirebaseMessagingService() {
                 vibrationPattern = longArrayOf(0, 900, 400, 900, 400, 1200)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setBypassDnd(false)
-                setSound(sound, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             }
         }
 
