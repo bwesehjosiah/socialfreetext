@@ -1689,8 +1689,15 @@ function openE2EERecovery(){
  $('e2ee-recovery-modal').classList.remove('hidden');$('e2ee-recovery-modal').classList.add('flex');
  getSupabase().from('e2ee_key_backups').select('user_id').eq('user_id',S.currentUserId).maybeSingle().then(({data,error})=>{
    if(error){toast('Could not check recovery backup: '+error.message,'error');return}
-   if(data){$('e2ee-recovery-restore-wrap').classList.remove('hidden');$('e2ee-recovery-help').textContent='This account has an encrypted key backup. Enter the recovery key you saved when you created it.'}
-   else{$('e2ee-recovery-create-wrap').classList.remove('hidden');$('e2ee-recovery-help').textContent='Create a recovery key on this device before switching phones or clearing app data.'}
+   const hasLocalKey=!!localStorage.getItem('sft-e2ee-'+S.currentUserId);
+   if(data){
+     $('e2ee-recovery-restore-wrap').classList.remove('hidden');
+     if(hasLocalKey)$('e2ee-recovery-create-wrap').classList.remove('hidden');
+     $('e2ee-recovery-help').textContent=hasLocalKey?'A backup already exists. You can restore it on this device or create a replacement key (which invalidates the previous recovery key).':'This account has an encrypted key backup. Enter the recovery key you saved when you created it.';
+   }else{
+     $('e2ee-recovery-create-wrap').classList.remove('hidden');
+     $('e2ee-recovery-help').textContent=hasLocalKey?'Create a recovery key on this device before switching phones or clearing app data.':'No backup exists yet. You need the original device that still holds your private messaging key to create one.';
+   }
  }).catch(e=>toast(e.message,'error'));
 }
 async function createE2EERecoveryBackup(){
@@ -1698,7 +1705,10 @@ async function createE2EERecoveryBackup(){
   const uid=S.currentUserId;if(!uid)throw new Error('Sign in first.');
   await ensureE2EEKeys(uid);
   const saved=JSON.parse(localStorage.getItem('sft-e2ee-'+uid)||'null');
-  if(!saved?.privateKey||!saved?.publicKey)throw new Error('This device does not have an exportable messaging key to back up.');
+  if(!saved?.privateKey||!saved?.publicKey)throw new Error('This device does not have the original messaging key. Restore it on the original device before creating a backup.');
+  const {data:existingBackup,error:checkError}=await getSupabase().from('e2ee_key_backups').select('user_id').eq('user_id',uid).maybeSingle();
+  if(checkError)throw checkError;
+  if(existingBackup&&!window.confirm('Replace the existing recovery backup? Your previous recovery key will stop working.'))return;
   const random=crypto.getRandomValues(new Uint8Array(32));
   const recoveryKey=e2eeBase64Url(random),salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
   const wrappingKey=await deriveE2EEBackupKey(recoveryKey,salt);
