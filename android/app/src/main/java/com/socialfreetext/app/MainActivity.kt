@@ -113,8 +113,11 @@ class MainActivity : AppCompatActivity() {
         val payload = JSONObject().put("type", "reply")
             .put("senderId", pending.first).put("text", pending.second).toString()
         val script = "window.receiveSFTNativeAction && window.receiveSFTNativeAction(" + JSONObject.quote(payload) + ")"
-        webView.evaluateJavascript(script, null)
-        pendingNotificationReply = null
+        webView.evaluateJavascript(script) { result ->
+            if (result == "true") {
+                pendingNotificationReply = null
+            }
+        }
     }
     private fun targetUrl(target: String?): String = when (target) {
         "call" -> "$APP_URL/?open=calls"
