@@ -1472,6 +1472,8 @@ async function loadLiveChats() {
   renderChats();
 }
 let pendingSFTNativeAction = null;
+let pendingSFTCallAction = null;
+let pendingSFTFcmToken = null;
 let sftLiveChatsReady = false;
 window.receiveSFTNativeAction = function(payload) {
   try {
@@ -1481,9 +1483,39 @@ window.receiveSFTNativeAction = function(payload) {
       if (S.currentUserId && sftLiveChatsReady) processSFTNativeAction();
       return true;
     }
+    if (action && action.type === 'call_action' && action.senderId && ['answer','reject'].includes(action.action)) {
+      pendingSFTCallAction = action;
+      processPendingSFTCallAction();
+      return true;
+    }
+    if (action && action.type === 'fcm_token' && action.token) {
+      pendingSFTFcmToken = action.token;
+      if (S.currentUserId) registerNativePushToken();
+      return true;
+    }
   } catch (error) { console.warn('Could not read notification action:', error.message); }
   return false;
 };
+async function registerNativePushToken() {
+  if (!S.currentUserId || !pendingSFTFcmToken) return;
+  const token = pendingSFTFcmToken;
+  const {error} = await getSupabase().from('device_push_tokens').upsert({
+    user_id:S.currentUserId, token, platform:'android', device_name:'SocialfreeText Android'
+  }, {onConflict:'token'});
+  if (error) { console.warn('Android push token registration failed:',error.message); return; }
+  pendingSFTFcmToken = null;
+}
+async function processPendingSFTCallAction() {
+  const action = pendingSFTCallAction;
+  if (!action || !S.currentUserId || !liveIncoming || liveCallPeerId !== action.senderId) return;
+  pendingSFTCallAction = null;
+  if (action.action === 'answer') await answerLiveCall();
+  else {
+    try { await sendCallSignal(action.senderId, liveCallKind, 'reject'); }
+    catch (error) { console.warn('Could not reject incoming call:',error.message); }
+    await cleanupLiveCall();
+  }
+}
 async function processSFTNativeAction() {
   const action = pendingSFTNativeAction;
   if (!action || !S.currentUserId) return;
@@ -1510,7 +1542,7 @@ function initUI() {
   renderNotifs();
   S.chats = [];
   renderChats();
-  loadLiveChats().then(()=>{sftLiveChatsReady=true;if(pendingSFTNativeAction)processSFTNativeAction()}).catch(error=>{console.warn('Could not load live chats:',error.message);toast('Could not load your conversations. Please refresh.','error');});
+  loadLiveChats().then(()=>{sftLiveChatsReady=true;if(pendingSFTNativeAction)processSFTNativeAction();if(pendingSFTFcmToken)registerNativePushToken()}).catch(error=>{console.warn('Could not load live chats:',error.message);toast('Could not load your conversations. Please refresh.','error');});
   subscribePeopleRealtime();
   loadPeople().catch(error=>console.warn('People load:',error.message));
   go('chats');
@@ -1841,8 +1873,8 @@ function updateLiveStatusUI(){renderPeople();if(activeChat){const c=chatById(act
 async function loadPersistedDM(chatId){const c=chatById(chatId);if(!c||c.type!=='dm')return;const meId=S.currentUserId,other=c.userId;const {data,error}=await getSupabase().from('messages').select('id,sender_id,recipient_id,body,created_at,read_at').or('and(sender_id.eq.'+meId+',recipient_id.eq.'+other+'),and(sender_id.eq.'+other+',recipient_id.eq.'+meId+')').order('created_at',{ascending:true}).limit(300);if(error){console.warn(error.message);return}const rows=[];for(const m of data||[]){let body,kind='text',duration='0:03';try{body=await decryptDM(m.sender_id===meId?m.recipient_id:m.sender_id,m.body);if(String(body).startsWith('{')){const parsed=JSON.parse(body);if(parsed.kind==='voice'){kind='voice';duration=parsed.duration||duration;body=parsed.url}}}catch{body='🔒 Could not decrypt on this device'}rows.push({id:m.id,from:m.sender_id,type:kind,text:body,dur:duration,at:new Date(m.created_at).getTime(),read:!!m.read_at,remote:true});liveSeenIds.add('m:'+m.id)}S.messages[chatId]=rows;renderMsgs();renderChats();}
 async function receiveLiveDM(m){if(!m?.id||liveSeenIds.has('m:'+m.id))return;liveSeenIds.add('m:'+m.id);const other=m.sender_id===S.currentUserId?m.recipient_id:m.sender_id;let body,kind='text',duration='0:03';try{body=await decryptDM(other,m.body);if(String(body).startsWith('{')){const parsed=JSON.parse(body);if(parsed.kind==='voice'){kind='voice';duration=parsed.duration||duration;body=parsed.url}}}catch{body='🔒 Could not decrypt on this device'}let c=S.chats.find(x=>x.type==='dm'&&x.userId===other);if(!c){await loadPeople().catch(()=>{});const p=peopleProfiles.find(x=>x.id===other);if(!p)return;c={id:'dm_'+other,type:'dm',userId:other,lastMsg:'',lastTime:Date.now(),unread:0};S.chats.push(c);S.messages[c.id]=[];S.users=S.users.filter(u=>u.id!==other);S.users.push({id:p.id,name:p.display_name||p.username,username:p.username,email:'',bio:p.bio||'',avatar:p.avatar_url||IMG_POOL[0],role:'User',status:'active'})}const msgs=S.messages[c.id]||(S.messages[c.id]=[]);if(!msgs.some(x=>x.id===m.id))msgs.push({id:m.id,from:m.sender_id,type:kind,text:body,dur:duration,at:new Date(m.created_at).getTime(),remote:true});c.lastMsg=body;c.lastTime=new Date(m.created_at).getTime();if(activeChat===c.id){renderMsgs();if(m.sender_id!==S.currentUserId)markDMRead(c.id)}else if(m.sender_id!==S.currentUserId){c.unread=(c.unread||0)+1;toast('New message from '+(userById(other)?.name||'your connection'),'success');if(S.settings.sounds)beep()}saveState();renderChats();}
 function subscribeLiveMessages(){const client=getSupabase();if(liveMessageChannel)client.removeChannel(liveMessageChannel);liveMessageChannel=client.channel('sft-messages-'+S.currentUserId).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:'recipient_id=eq.'+S.currentUserId},e=>receiveLiveDM(e.new)).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:'sender_id=eq.'+S.currentUserId},e=>receiveLiveDM(e.new)).on('postgres_changes',{event:'UPDATE',schema:'public',table:'messages',filter:'sender_id=eq.'+S.currentUserId},e=>{const m=e.new;if(!m?.id||!m.read_at)return;for(const rows of Object.values(S.messages)){const item=rows.find(x=>x.id===m.id);if(item)item.read=true}renderMsgs();}).subscribe();}
-async function sendCallSignal(peer,kind,type,payload=null){const {error}=await getSupabase().from('call_signals').insert({caller_id:S.currentUserId,recipient_id:peer,kind,signal_type:type,payload});if(error)throw error;if(type==='offer')sendSFTPush(peer,'call',{caller_name:me()?.name||'SocialfreeText contact'}).catch(()=>{});}
-function ringIncoming(row){if(livePeer){sendCallSignal(row.caller_id,row.kind,'busy').catch(()=>{});return}liveIncoming=true;liveCallPeerId=row.caller_id;liveCallKind=row.kind;const u=userById(row.caller_id)||peopleProfiles.find(p=>p.id===row.caller_id)||{};$('call-av').src=u.avatar||u.avatar_url||'';$('call-name').textContent=u.name||u.display_name||'Incoming call';$('call-sub').textContent='Incoming '+row.kind+' call — ringing';$('call-answer').classList.remove('hidden');$('call-answer').classList.add('flex');$('call-scr').classList.remove('hidden');$('call-scr').classList.add('flex');try{const ctx=new(window.AudioContext||window.webkitAudioContext)(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=880;gain.gain.value=.06;osc.connect(gain);gain.connect(ctx.destination);osc.start();let stopped=false;const ringAgain=()=>{if(stopped)return;const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=660;g.gain.value=.055;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.35)};const ringTimer=setInterval(ringAgain,1000);window.__sftRingStop=()=>{stopped=true;clearInterval(ringTimer);try{osc.stop();ctx.close()}catch{}}}catch{}}
+async function sendCallSignal(peer,kind,type,payload=null){const {data,error}=await getSupabase().from('call_signals').insert({caller_id:S.currentUserId,recipient_id:peer,kind,signal_type:type,payload}).select('id').single();if(error)throw error;if(type==='offer')sendSFTPush(peer,'call',{sender_id:S.currentUserId,call_id:data.id,caller_name:me()?.name||'SocialfreeText contact'}).catch(()=>{});}
+function ringIncoming(row){if(livePeer){sendCallSignal(row.caller_id,row.kind,'busy').catch(()=>{});return}liveIncoming=true;liveCallPeerId=row.caller_id;liveCallKind=row.kind;const u=userById(row.caller_id)||peopleProfiles.find(p=>p.id===row.caller_id)||{};$('call-av').src=u.avatar||u.avatar_url||'';$('call-name').textContent=u.name||u.display_name||'Incoming call';$('call-sub').textContent='Incoming '+row.kind+' call — ringing';$('call-answer').classList.remove('hidden');$('call-answer').classList.add('flex');$('call-scr').classList.remove('hidden');$('call-scr').classList.add('flex');try{const ctx=new(window.AudioContext||window.webkitAudioContext)(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=880;gain.gain.value=.06;osc.connect(gain);gain.connect(ctx.destination);osc.start();let stopped=false;const ringAgain=()=>{if(stopped)return;const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=660;g.gain.value=.055;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.35)};const ringTimer=setInterval(ringAgain,1000);window.__sftRingStop=()=>{stopped=true;clearInterval(ringTimer);try{osc.stop();ctx.close()}catch{}}}catch{}processPendingSFTCallAction().catch(console.warn)}
 async function subscribeLiveCalls(){const client=getSupabase();if(liveCallChannel)client.removeChannel(liveCallChannel);liveCallChannel=client.channel('sft-call-'+S.currentUserId).on('postgres_changes',{event:'INSERT',schema:'public',table:'call_signals',filter:'recipient_id=eq.'+S.currentUserId},async e=>{const r=e.new;if(!r?.id||liveSeenIds.has('c:'+r.id))return;liveSeenIds.add('c:'+r.id);if(r.signal_type==='offer'){ringIncoming(r);return}if(r.caller_id!==liveCallPeerId||!livePeer)return;try{if(r.signal_type==='answer'){await livePeer.setRemoteDescription(r.payload);for(const ice of pendingLiveIce.splice(0))try{await livePeer.addIceCandidate(ice)}catch{}$('call-sub').textContent='Connecting…'}else if(r.signal_type==='ice'){if(livePeer.remoteDescription)await livePeer.addIceCandidate(r.payload);else pendingLiveIce.push(r.payload)}else if(['hangup','reject','busy'].includes(r.signal_type)){toast(r.signal_type==='busy'?'User is busy':'Call ended','info');cleanupLiveCall()}}catch(err){console.warn(err.message)}}).subscribe();}
 function setupLiveCallMedia(kind){
  const stage=$('call-vid');stage.classList.toggle('hidden',kind!=='video');stage.classList.toggle('flex',kind==='video');
@@ -1875,7 +1907,7 @@ async function sendEncryptedVoice(chunks,duration,stream){
   const {error:upErr}=await getSupabase().storage.from('voice-encrypted').upload(path,new Blob([packed],{type:'application/octet-stream'}),{contentType:'application/octet-stream',upsert:false});if(upErr)throw upErr;
   const {data}=getSupabase().storage.from('voice-encrypted').getPublicUrl(path);
   const body=await encryptDM(c.userId,JSON.stringify({kind:'voice',url:data.publicUrl,duration}));
-  const {data:row,error}=await getSupabase().from('messages').insert({sender_id:S.currentUserId,recipient_id:c.userId,body}).select('id,sender_id,recipient_id,body,created_at,read_at').single();if(error)throw error;sendSFTPush(c.userId,'message').catch(()=>{});await receiveLiveDM(row);
+  const {data:row,error}=await getSupabase().from('messages').insert({sender_id:S.currentUserId,recipient_id:c.userId,body}).select('id,sender_id,recipient_id,body,created_at,read_at').single();if(error)throw error;sendSFTPush(c.userId,'message',{sender_id:S.currentUserId}).catch(()=>{});await receiveLiveDM(row);
  }catch(e){toast('Voice message failed: '+e.message,'error')}
  finally{stream?.getTracks().forEach(t=>t.stop())}
 }
@@ -1894,7 +1926,7 @@ async function sendMsg() {
  if(!text||!c)return;
  if(c.type!=='dm'||!liveConnected(c.userId))return toast('Connect with this user before sending private messages.','error');
  inp.value='';inp.style.height='auto';$('mic-btn').classList.remove('hidden');$('send-btn').classList.add('hidden');$('send-btn').classList.remove('flex');
- try{const body=await encryptDM(c.userId,text);const {data,error}=await getSupabase().from('messages').insert({sender_id:S.currentUserId,recipient_id:c.userId,body}).select('id,sender_id,recipient_id,body,created_at').single();if(error)throw error;sendSFTPush(c.userId,'message',{preview:String(text||'').slice(0,140)}).catch(()=>{});await receiveLiveDM(data)}
+ try{const body=await encryptDM(c.userId,text);const {data,error}=await getSupabase().from('messages').insert({sender_id:S.currentUserId,recipient_id:c.userId,body}).select('id,sender_id,recipient_id,body,created_at').single();if(error)throw error;sendSFTPush(c.userId,'message',{sender_id:S.currentUserId}).catch(()=>{});await receiveLiveDM(data)}
  catch(e){inp.value=text;toast('Message not sent: '+e.message,'error')}
 }
 function maybeAutoReply() {
