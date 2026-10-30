@@ -1775,7 +1775,7 @@ async function restoreE2EERecoveryBackup(){
  }catch(e){toast(e.name==='OperationError'?'That PIN is incorrect or the backup is damaged.':e.message,'error')}
 }
 
-function copyE2EERecoveryKey(){const value=$('e2ee-recovery-key-display').value;if(!value)return;try{await navigator.clipboard.writeText(value);toast('Recovery key copied. Save it somewhere safe.','success')}catch{ $('e2ee-recovery-key-display').focus();$('e2ee-recovery-key-display').select();toast('Select and copy the recovery key manually.','info')}}
+async function copyE2EERecoveryKey(){const value=$('e2ee-recovery-key-display').value;if(!value)return;try{await navigator.clipboard.writeText(value);toast('Recovery key copied. Save it somewhere safe.','success')}catch{ $('e2ee-recovery-key-display').focus();$('e2ee-recovery-key-display').select();toast('Select and copy the recovery key manually.','info')}}
 function confirmE2EERecoverySaved(){if(!$('e2ee-recovery-confirm-saved').checked)return toast('Please confirm that you saved your recovery key.','error');closeModal('e2ee-recovery-modal');toast('Encrypted message recovery is set up. Keep your recovery key safe.','success')}
 async function restoreE2EERecoveryBackup(){
  try{
