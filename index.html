@@ -2942,6 +2942,17 @@ async function init() {
   if (location.hash === '#admin') { openAdminLogin(); return; }
   try {
     const client = getSupabase();
+    // A PKCE email link returns ?code=... . Exchange it before checking the
+    // session; otherwise init() can see no session and incorrectly show login.
+    const callbackUrl = new URL(window.location.href);
+    const callbackCode = callbackUrl.searchParams.get('code');
+    if (callbackCode) {
+      const { error: exchangeError } = await client.auth.exchangeCodeForSession(callbackCode);
+      if (exchangeError) throw exchangeError;
+      // Remove the one-time code from the address bar after a successful exchange.
+      callbackUrl.searchParams.delete('code');
+      history.replaceState(null, '', callbackUrl.pathname + callbackUrl.search + callbackUrl.hash);
+    }
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
     if (isPasswordRecovery || recoveryFlowActive) {
