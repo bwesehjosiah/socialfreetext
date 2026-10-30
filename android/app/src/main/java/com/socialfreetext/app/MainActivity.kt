@@ -2,6 +2,7 @@ package com.socialfreetext.app
 
 import android.Manifest
 import android.app.NotificationManager
+import android.media.AudioManager
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -161,6 +162,22 @@ class MainActivity : AppCompatActivity() {
 
     inner class PageBridge {
         @JavascriptInterface fun onClick() { showClickLoading() }
+        @JavascriptInterface fun setSpeakerphone(enabled: Boolean) {
+            runOnUiThread {
+                val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+                audio.mode = AudioManager.MODE_IN_COMMUNICATION
+                @Suppress("DEPRECATION")
+                run { audio.isSpeakerphoneOn = enabled }
+            }
+        }
+        @JavascriptInterface fun resetCallAudio() {
+            runOnUiThread {
+                val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+                @Suppress("DEPRECATION")
+                run { audio.isSpeakerphoneOn = false }
+                audio.mode = AudioManager.MODE_NORMAL
+            }
+        }
     }
 
     @Deprecated("Deprecated in Android API")
@@ -257,6 +274,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         clickTask?.let { handler.removeCallbacks(it) }
+        val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+        @Suppress("DEPRECATION")
+        run { audio.isSpeakerphoneOn = false }
+        audio.mode = AudioManager.MODE_NORMAL
         if (::webView.isInitialized) webView.removeJavascriptInterface("SFTApp")
         super.onDestroy()
     }
