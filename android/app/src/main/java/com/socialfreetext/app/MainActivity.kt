@@ -13,6 +13,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.View
+import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import org.json.JSONObject
@@ -101,7 +102,7 @@ class MainActivity : AppCompatActivity() {
                 showLoading(10)
                 webView.reload()
             }
-            addView(webView, SwipeRefreshLayout.LayoutParams(-1, -1))
+            addView(webView, ViewGroup.LayoutParams(-1, -1))
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
