@@ -1532,7 +1532,7 @@ async function processSFTNativeAction() {
 };
 function initUI() {
   const u = me();
-  ensureE2EEKeys(S.currentUserId).catch(e=>console.warn('Encryption setup:',e.message)); subscribeLivePresence(); subscribeLiveMessages(); subscribeLiveCalls();
+  ensureE2EEKeys(S.currentUserId).catch(e=>console.warn('Encryption setup:',e.message)); subscribeLivePresence(); subscribeLiveMessages(); subscribeLiveCalls(); loadPendingIncomingCall();
   $('hdr-avatar').src = u.avatar;
   $('sb-avatar').src = u.avatar;
   $('sb-name').textContent = u.name;
@@ -1876,6 +1876,16 @@ function subscribeLiveMessages(){const client=getSupabase();if(liveMessageChanne
 async function sendCallSignal(peer,kind,type,payload=null){const {data,error}=await getSupabase().from('call_signals').insert({caller_id:S.currentUserId,recipient_id:peer,kind,signal_type:type,payload}).select('id').single();if(error)throw error;if(type==='offer')sendSFTPush(peer,'call',{sender_id:S.currentUserId,call_id:data.id,caller_name:me()?.name||'SocialfreeText contact'}).catch(()=>{});}
 function ringIncoming(row){if(livePeer){sendCallSignal(row.caller_id,row.kind,'busy').catch(()=>{});return}liveIncoming=true;liveCallPeerId=row.caller_id;liveCallKind=row.kind;const u=userById(row.caller_id)||peopleProfiles.find(p=>p.id===row.caller_id)||{};$('call-av').src=u.avatar||u.avatar_url||'';$('call-name').textContent=u.name||u.display_name||'Incoming call';$('call-sub').textContent='Incoming '+row.kind+' call — ringing';$('call-answer').classList.remove('hidden');$('call-answer').classList.add('flex');$('call-scr').classList.remove('hidden');$('call-scr').classList.add('flex');try{const ctx=new(window.AudioContext||window.webkitAudioContext)(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=880;gain.gain.value=.06;osc.connect(gain);gain.connect(ctx.destination);osc.start();let stopped=false;const ringAgain=()=>{if(stopped)return;const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=660;g.gain.value=.055;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.35)};const ringTimer=setInterval(ringAgain,1000);window.__sftRingStop=()=>{stopped=true;clearInterval(ringTimer);try{osc.stop();ctx.close()}catch{}}}catch{}processPendingSFTCallAction().catch(console.warn)}
 async function subscribeLiveCalls(){const client=getSupabase();if(liveCallChannel)client.removeChannel(liveCallChannel);liveCallChannel=client.channel('sft-call-'+S.currentUserId).on('postgres_changes',{event:'INSERT',schema:'public',table:'call_signals',filter:'recipient_id=eq.'+S.currentUserId},async e=>{const r=e.new;if(!r?.id||liveSeenIds.has('c:'+r.id))return;liveSeenIds.add('c:'+r.id);if(r.signal_type==='offer'){ringIncoming(r);return}if(r.caller_id!==liveCallPeerId||!livePeer)return;try{if(r.signal_type==='answer'){await livePeer.setRemoteDescription(r.payload);for(const ice of pendingLiveIce.splice(0))try{await livePeer.addIceCandidate(ice)}catch{}$('call-sub').textContent='Connecting…'}else if(r.signal_type==='ice'){if(livePeer.remoteDescription)await livePeer.addIceCandidate(r.payload);else pendingLiveIce.push(r.payload)}else if(['hangup','reject','busy'].includes(r.signal_type)){toast(r.signal_type==='busy'?'User is busy':'Call ended','info');cleanupLiveCall()}}catch(err){console.warn(err.message)}}).subscribe();}
+async function loadPendingIncomingCall(){
+ try{
+  const {data,error}=await getSupabase().from('call_signals').select('id,caller_id,kind,signal_type,payload,created_at').eq('recipient_id',S.currentUserId).eq('signal_type','offer').order('created_at',{ascending:false}).limit(1);
+  if(error)throw error;
+  const row=data?.[0];
+  if(row&&Date.now()-new Date(row.created_at).getTime()<60000&&!liveIncoming&&!livePeer){
+   if(!liveSeenIds.has('c:'+row.id)){liveSeenIds.add('c:'+row.id);ringIncoming(row);}
+  }
+ }catch(error){console.warn('Could not check pending incoming calls:',error.message)}
+}
 function setupLiveCallMedia(kind){
  const stage=$('call-vid');stage.classList.toggle('hidden',kind!=='video');stage.classList.toggle('flex',kind==='video');
  const controls=document.querySelector('#call-scr .safe-b');if(controls){controls.style.position='relative';controls.style.zIndex='30';}
