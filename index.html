@@ -989,7 +989,8 @@ function getSupabase() {
   }
   if (!window.supabase?.createClient) throw new Error('Supabase client did not load. Check your internet connection and reload.');
   if (!supabaseClient) supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    // Explicit storage keeps the same Supabase session across browser refreshes and Android WebView restarts.
+    auth: { storage: window.localStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' }
   });
   return supabaseClient;
 }
@@ -2912,11 +2913,11 @@ async function init() {
   const callbackParams = new URLSearchParams(location.hash.replace(/^#/, ''));
   const emailWasVerified = callbackParams.get('type') === 'signup' || callbackParams.get('type') === 'email';
   const isPasswordRecovery = callbackParams.get('type') === 'recovery';
-  // Local demo sessions are intentionally not trusted for authentication anymore.
+  // Do not overwrite or discard a persisted Supabase session on page/app startup.
+  // Keep the splash screen covering the UI until session restoration has completed.
   S.currentUserId = null;
-  $('auth-screen').classList.remove('hidden');
+  $('auth-screen').classList.add('hidden');
   $('app').classList.add('hidden');
-  showAuth('login');
   if (location.hash === '#admin') { openAdminLogin(); return; }
   try {
     const client = getSupabase();
@@ -2946,10 +2947,19 @@ async function init() {
       $('auth-screen').classList.add('hidden');
       $('app').classList.remove('hidden');
       initUI();
+    } else {
+      // Only show login after Supabase confirms there is no saved session.
+      $('app').classList.add('hidden');
+      $('auth-screen').classList.remove('hidden');
+      showAuth('login');
     }
   } catch (error) {
-    // Keep the login screen visible while configuration is incomplete.
-    console.warn('SocialfreeText Supabase setup:', error.message);
+    // A temporary network/profile error must not silently sign the user out.
+    console.warn('SocialfreeText session restore:', error.message);
+    $('app').classList.add('hidden');
+    $('auth-screen').classList.remove('hidden');
+    showAuth('login');
+    toast('Could not restore your session. Check your connection and try again.', 'error');
     if (emailWasVerified) showEmailVerifiedOverlay();
   }
 }
