@@ -836,26 +836,16 @@ tailwind.config = {
       <h2 class="font-black text-base">Encrypted Message Recovery</h2>
       <button onclick="closeModal('e2ee-recovery-modal')" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <p id="e2ee-recovery-help" class="text-xs text-gray-500 mb-3">Create a recovery key to protect a backup of your private messaging key.</p>
+    <p id="e2ee-recovery-help" class="text-xs text-gray-500 mb-3">Create a 4-digit PIN to protect a backup of your private messaging key.</p>
     <div id="e2ee-recovery-create-wrap" class="hidden">
       <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">CREATE A 4-DIGIT RECOVERY PIN</label>
       <input id="e2ee-recovery-pin-create" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password" placeholder="4-digit PIN" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm tracking-[0.5em] text-center mb-2">
       <input id="e2ee-recovery-pin-confirm" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password" placeholder="Confirm 4-digit PIN" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm tracking-[0.5em] text-center mb-3">
-      <p class="text-[11px] text-amber-600 dark:text-amber-400 mb-3">You will need this PIN together with your recovery key when restoring messages. Do not use your bank PIN.</p>
-      <button onclick="createE2EERecoveryBackup()" class="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">Create encrypted recovery backup</button>
-    </div>
-    <div id="e2ee-recovery-key-wrap" class="hidden">
-      <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">YOUR ONE-TIME RECOVERY KEY</label>
-      <textarea id="e2ee-recovery-key-display" readonly rows="3" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-mono break-all"></textarea>
-      <button onclick="copyE2EERecoveryKey()" class="w-full mt-2 py-2.5 rounded-xl bg-brand-600 text-white text-xs font-bold"><i class="fa-solid fa-copy mr-1"></i>Copy recovery key</button>
-      <p class="text-[11px] text-amber-600 dark:text-amber-400 mt-3">Save this key somewhere private and safe. SocialfreeText cannot recover it if you lose it. Anyone with this key and your account access may be able to restore your encrypted messages.</p>
-      <label class="flex items-start gap-2 text-xs mt-3"><input id="e2ee-recovery-confirm-saved" type="checkbox" class="mt-0.5"><span>I have saved my recovery key somewhere safe.</span></label>
-      <button onclick="confirmE2EERecoverySaved()" class="w-full mt-3 py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold">I've saved my recovery key</button>
+      <p class="text-[11px] text-amber-600 dark:text-amber-400 mb-3">Your PIN is the only recovery credential. A 4-digit PIN is less secure than a longer password, so choose a PIN you do not use elsewhere.</p>
+      <button onclick="createE2EERecoveryBackup()" class="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">Create PIN-only recovery backup</button>
     </div>
     <div id="e2ee-recovery-restore-wrap" class="hidden">
-      <label for="e2ee-recovery-key-input" class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">ENTER YOUR RECOVERY KEY</label>
-      <textarea id="e2ee-recovery-key-input" rows="3" autocomplete="off" spellcheck="false" placeholder="Paste your saved recovery key here" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-mono"></textarea>
-      <label for="e2ee-recovery-pin-restore" class="block text-[10px] font-black mt-3 mb-1 text-gray-400 tracking-wider">ENTER YOUR 4-DIGIT RECOVERY PIN</label>
+      <label for="e2ee-recovery-pin-restore" class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">ENTER YOUR 4-DIGIT RECOVERY PIN</label>
       <input id="e2ee-recovery-pin-restore" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="4-digit PIN" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm tracking-[0.5em] text-center">
       <button onclick="restoreE2EERecoveryBackup()" class="w-full mt-3 py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">Restore encrypted messages</button>
     </div>
@@ -1680,30 +1670,30 @@ const liveKeyCache=new Map();
 let e2eeRestoreRequired=false;
 function e2eeBase64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 function e2eeFromBase64Url(value){const s=String(value).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(s+'='.repeat((4-s.length%4)%4));return Uint8Array.from(raw,ch=>ch.charCodeAt(0))}
-async function deriveE2EEBackupKey(recoveryKey,pin,salt){
- const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(recoveryKey+'|'+pin),'PBKDF2',false,['deriveKey']);
+async function deriveE2EEBackupKey(pin,salt){
+ const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);
  return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations:600000},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
 function openE2EERecovery(){
  $('e2ee-recovery-create-wrap').classList.add('hidden');
  $('e2ee-recovery-key-wrap').classList.add('hidden');
  $('e2ee-recovery-restore-wrap').classList.add('hidden');
- $('e2ee-recovery-help').textContent='Create a recovery key and 4-digit PIN on this device, or enter both to restore your encrypted message key on a new device.';
- $('e2ee-recovery-key-display').value='';
- $('e2ee-recovery-key-input').value='';
+ $('e2ee-recovery-help').textContent='Create a 4-digit PIN on this device. You will need that PIN to restore your encrypted messages on another device.';
  $('e2ee-recovery-pin-create').value='';$('e2ee-recovery-pin-confirm').value='';$('e2ee-recovery-pin-restore').value='';
- $('e2ee-recovery-confirm-saved').checked=false;
  $('e2ee-recovery-modal').classList.remove('hidden');$('e2ee-recovery-modal').classList.add('flex');
- getSupabase().from('e2ee_key_backups').select('user_id').eq('user_id',S.currentUserId).maybeSingle().then(({data,error})=>{
+ getSupabase().from('e2ee_key_backups').select('backup').eq('user_id',S.currentUserId).maybeSingle().then(({data,error})=>{
    if(error){toast('Could not check recovery backup: '+error.message,'error');return}
    const hasLocalKey=!!localStorage.getItem('sft-e2ee-'+S.currentUserId);
-   if(data){
+   if(data?.backup){
      $('e2ee-recovery-restore-wrap').classList.remove('hidden');
      if(hasLocalKey)$('e2ee-recovery-create-wrap').classList.remove('hidden');
-     $('e2ee-recovery-help').textContent=hasLocalKey?'A backup already exists. You can restore it on this device or create a replacement key (which invalidates the previous recovery key).':'This account has an encrypted key backup. Enter the recovery key and 4-digit PIN you created with it.';
+     $('e2ee-recovery-help').textContent=data.backup.version===2
+       ?(hasLocalKey?'A PIN recovery backup already exists. You can restore it here or replace it with a new PIN.':'Enter your 4-digit PIN to restore your encrypted message key.')
+       :(hasLocalKey?'An older recovery backup exists. Create a new PIN-only backup from this original device to replace it.':'This is an older backup that requires the previous recovery key as well as its PIN. Keep the original device; PIN-only restoration is not available for this older backup.');
+     if(data.backup.version!==2&&!hasLocalKey)$('e2ee-recovery-restore-wrap').classList.add('hidden');
    }else{
      $('e2ee-recovery-create-wrap').classList.remove('hidden');
-     $('e2ee-recovery-help').textContent=hasLocalKey?'Create a recovery key and 4-digit PIN on this device before switching phones or clearing app data.':'No backup exists yet. You need the original device that still holds your private messaging key to create one.';
+     $('e2ee-recovery-help').textContent=hasLocalKey?'Create your PIN-only recovery backup before switching phones or clearing app data.':'No backup exists yet. You need the original device that still holds your private messaging key to create one.';
    }
  }).catch(e=>toast(e.message,'error'));
 }
@@ -1715,26 +1705,50 @@ async function createE2EERecoveryBackup(){
   if(pin!==confirmPin)throw new Error('The two PIN entries do not match.');
   await ensureE2EEKeys(uid);
   const saved=JSON.parse(localStorage.getItem('sft-e2ee-'+uid)||'null');
-  if(!saved?.privateKey||!saved?.publicKey)throw new Error('This device does not have the original messaging key. Restore it on the original device before creating a backup.');
+  if(!saved?.privateKey||!saved?.publicKey)throw new Error('This device does not have the original messaging key. Create the backup on the original device.');
   const {data:existingBackup,error:checkError}=await getSupabase().from('e2ee_key_backups').select('user_id').eq('user_id',uid).maybeSingle();
   if(checkError)throw checkError;
-  if(existingBackup&&!window.confirm('Replace the existing recovery backup? Your previous recovery key will stop working.'))return;
-  const random=crypto.getRandomValues(new Uint8Array(32));
-  const recoveryKey=e2eeBase64Url(random),salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
-  const wrappingKey=await deriveE2EEBackupKey(recoveryKey,pin,salt);
+  if(existingBackup&&!window.confirm('Replace the existing recovery backup with a new PIN-only backup?'))return;
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const wrappingKey=await deriveE2EEBackupKey(pin,salt);
   const payload=new TextEncoder().encode(JSON.stringify({version:1,privateKey:saved.privateKey,publicKey:saved.publicKey}));
   const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},wrappingKey,payload);
-  const backup={version:1,kdf:'PBKDF2-SHA-256',iterations:600000,salt:e2eeBase64Url(salt),iv:e2eeBase64Url(iv),ciphertext:e2eeBase64Url(new Uint8Array(encrypted))};
+  const backup={version:2,kdf:'PBKDF2-SHA-256',iterations:600000,salt:e2eeBase64Url(salt),iv:e2eeBase64Url(iv),ciphertext:e2eeBase64Url(new Uint8Array(encrypted))};
   const {error}=await getSupabase().from('e2ee_key_backups').upsert({user_id:uid,backup},{onConflict:'user_id'});
   if(error)throw error;
-  $('e2ee-recovery-key-display').value=recoveryKey;
   $('e2ee-recovery-create-wrap').classList.add('hidden');
-  $('e2ee-recovery-restore-wrap').classList.add('hidden');
-  $('e2ee-recovery-key-wrap').classList.remove('hidden');
-  $('e2ee-recovery-help').textContent='Your encrypted key backup is ready. Save both your recovery key and 4-digit PIN securely; neither can be shown again.';
+  $('e2ee-recovery-restore-wrap').classList.remove('hidden');
+  $('e2ee-recovery-pin-restore').value='';
+  $('e2ee-recovery-help').textContent='Your encrypted backup is ready. Remember your 4-digit PIN; it is the only recovery credential.';
+  toast('PIN-only encrypted recovery backup created.','success');
  }catch(e){toast('Could not create recovery backup: '+e.message,'error')}
 }
-async function copyE2EERecoveryKey(){const value=$('e2ee-recovery-key-display').value;if(!value)return;try{await navigator.clipboard.writeText(value);toast('Recovery key copied. Save it somewhere safe.','success')}catch{ $('e2ee-recovery-key-display').focus();$('e2ee-recovery-key-display').select();toast('Select and copy the recovery key manually.','info')}}
+async function restoreE2EERecoveryBackup(){
+ try{
+  const uid=S.currentUserId,pin=$('e2ee-recovery-pin-restore').value;
+  if(!uid)throw new Error('Sign in first.');
+  if(!/^[0-9]{4}$/.test(pin))throw new Error('Enter your 4-digit recovery PIN.');
+  const {data,error}=await getSupabase().from('e2ee_key_backups').select('backup').eq('user_id',uid).maybeSingle();
+  if(error)throw error;if(!data?.backup)throw new Error('No encrypted key backup exists for this account.');
+  const b=data.backup;
+  if(b.version!==2||b.kdf!=='PBKDF2-SHA-256'||b.iterations!==600000)throw new Error('This is an older recovery backup. To switch to PIN-only recovery, create a new backup from the original device that still has your messaging key.');
+  const wrappingKey=await deriveE2EEBackupKey(pin,e2eeFromBase64Url(b.salt));
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:e2eeFromBase64Url(b.iv)},wrappingKey,e2eeFromBase64Url(b.ciphertext));
+  const saved=JSON.parse(new TextDecoder().decode(plain));
+  if(saved.version!==1||!saved.privateKey||!saved.publicKey)throw new Error('The recovery backup is invalid.');
+  const privateKey=await crypto.subtle.importKey('jwk',saved.privateKey,{name:'ECDH',namedCurve:'P-256'},false,['deriveKey']);
+  await crypto.subtle.importKey('jwk',saved.publicKey,{name:'ECDH',namedCurve:'P-256'},true,[]);
+  localStorage.setItem('sft-e2ee-'+uid,JSON.stringify({privateKey:saved.privateKey,publicKey:saved.publicKey}));
+  liveKeyCache.set(uid,{privateKey,publicJwk:saved.publicKey});
+  const {error:profileError}=await getSupabase().from('profiles').update({e2ee_public_key:JSON.stringify(saved.publicKey)}).eq('id',uid);
+  if(profileError)throw profileError;
+  e2eeRestoreRequired=false;closeModal('e2ee-recovery-modal');
+  toast('Your encrypted message key has been restored on this device.','success');
+  if(activeChat)await loadPersistedDM(activeChat);
+ }catch(e){toast(e.name==='OperationError'?'That PIN is incorrect or the backup is damaged.':e.message,'error')}
+}
+
+function copyE2EERecoveryKey(){const value=$('e2ee-recovery-key-display').value;if(!value)return;try{await navigator.clipboard.writeText(value);toast('Recovery key copied. Save it somewhere safe.','success')}catch{ $('e2ee-recovery-key-display').focus();$('e2ee-recovery-key-display').select();toast('Select and copy the recovery key manually.','info')}}
 function confirmE2EERecoverySaved(){if(!$('e2ee-recovery-confirm-saved').checked)return toast('Please confirm that you saved your recovery key.','error');closeModal('e2ee-recovery-modal');toast('Encrypted message recovery is set up. Keep your recovery key safe.','success')}
 async function restoreE2EERecoveryBackup(){
  try{
