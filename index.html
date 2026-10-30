@@ -984,15 +984,30 @@ function showAuth(view) {
 const SUPABASE_URL = 'https://drkmoldcmvsjgmzgevxv.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_IK-tzhu6mbASQLfS1thuKQ_V2XBneYq';
 let supabaseClient = null;
+let recoveryFlowActive = false;
 function getSupabase() {
   if (SUPABASE_URL.includes('YOUR_PROJECT_ID') || SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')) {
     throw new Error('Supabase is not configured yet. Add your Project URL and publishable key in Index.html after creating your Supabase project.');
   }
   if (!window.supabase?.createClient) throw new Error('Supabase client did not load. Check your internet connection and reload.');
-  if (!supabaseClient) supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    // Explicit storage keeps the same Supabase session across browser refreshes and Android WebView restarts.
-    auth: { storage: window.localStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' }
-  });
+  if (!supabaseClient) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      // Explicit storage keeps the same Supabase session across browser refreshes and Android WebView restarts.
+      auth: { storage: window.localStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' }
+    });
+    // PKCE recovery callbacks can arrive as a ?code= query rather than #type=recovery.
+    // Supabase emits PASSWORD_RECOVERY after exchanging the callback; handle both URL forms.
+    supabaseClient.auth.onAuthStateChange((event) => {
+      if (event !== 'PASSWORD_RECOVERY') return;
+      recoveryFlowActive = true;
+      setTimeout(() => {
+        $('app').classList.add('hidden');
+        $('auth-screen').classList.remove('hidden');
+        $('loader').classList.add('hidden');
+        showAuth('new-password');
+      }, 0);
+    });
+  }
   return supabaseClient;
 }
 function authErrorMessage(error) {
@@ -1139,7 +1154,7 @@ $('form-new-password').addEventListener('submit', async e => {
   e.preventDefault();
   const password = $('reset-new-pw').value;
   const confirmation = $('reset-confirm-pw').value;
-  if (password.length < 8) return toast('Use a password of at least 8 characters.', 'error');
+  if (password.length < 12) return toast('Use at least 12 characters for a stronger password.', 'error');
   if (password !== confirmation) return toast('The passwords do not match.', 'error');
   const button = $('form-new-password').querySelector('button[type="submit"]');
   if (button) { button.disabled = true; button.textContent = 'Updating password…'; }
@@ -1147,10 +1162,15 @@ $('form-new-password').addEventListener('submit', async e => {
     const client = getSupabase();
     const { error } = await client.auth.updateUser({ password });
     if (error) throw error;
-    await client.auth.signOut();
+    // The recovery link has served its purpose. Clear the local recovery session
+    // so the user must authenticate with the new password on the next sign-in.
+    await client.auth.signOut({ scope: 'local' });
+    recoveryFlowActive = false;
     history.replaceState(null, '', location.pathname + location.search);
     $('reset-new-pw').value = '';
     $('reset-confirm-pw').value = '';
+    $('auth-screen').classList.remove('hidden');
+    $('app').classList.add('hidden');
     showAuth('login');
     toast('Password updated successfully. Sign in with your new password.', 'success');
   } catch (error) {
@@ -2924,8 +2944,15 @@ async function init() {
     const client = getSupabase();
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
-    if (isPasswordRecovery) {
-      if (!data.session) throw new Error('This password reset link is invalid or expired. Request a new one.');
+    if (isPasswordRecovery || recoveryFlowActive) {
+      if (!data.session) {
+        $('auth-screen').classList.remove('hidden');
+        $('app').classList.add('hidden');
+        showAuth('login');
+        $('loader').classList.add('hidden');
+        toast('This password reset link is invalid or expired. Request a new one.', 'error');
+        return;
+      }
       $('auth-screen').classList.remove('hidden');
       $('app').classList.add('hidden');
       showAuth('new-password');
