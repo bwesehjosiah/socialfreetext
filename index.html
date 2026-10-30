@@ -135,7 +135,7 @@ tailwind.config = {
           <button type="button" onclick="showAuth('recovery')" class="hover:underline">Forgot password?</button>
           <button type="button" onclick="showAuth('signup')" class="text-brand-500 font-bold hover:underline">Create account</button>
         </div>
-        <button type="button" id="resend-verification-btn" onclick="resendVerificationEmail()" class="w-full text-xs font-bold text-brand-500 hover:underline pt-1">Resend email verification</button>
+        <button type="button" id="resend-verification-btn" onclick="resendVerificationEmail()" class="hidden w-full text-xs font-bold text-brand-500 hover:underline pt-1">Resend email verification</button>
       </form>
 
       <!-- Signup -->
@@ -1638,7 +1638,7 @@ function setupLiveCallMedia(kind){
  }else{document.getElementById('live-local-media')?.remove();document.getElementById('live-remote-media')?.remove();$('call-cam').classList.add('hidden');$('call-cam').classList.remove('flex');$('call-flip').classList.add('hidden');$('call-flip').classList.remove('flex');}
 }
 async function switchLiveCamera(){if(!liveLocalStream||liveCallKind!=='video')return;try{const current=liveLocalStream.getVideoTracks()[0],facing=current?.getSettings?.().facingMode;const next=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facing==='environment'?'user':'environment'}}});const track=next.getVideoTracks()[0],sender=livePeer?.getSenders().find(x=>x.track?.kind==='video');if(sender)await sender.replaceTrack(track);if(current){liveLocalStream.removeTrack(current);current.stop();}liveLocalStream.addTrack(track);const local=document.getElementById('live-local-media');if(local){local.srcObject=liveLocalStream;local.play().catch(()=>{});}}catch(e){toast('Could not switch camera: '+e.message,'error')}}
-async function startLiveCall(kind,userId){userId=userId||chatById(activeChat)?.userId;if(!userId||!liveConnected(userId))return toast('Calls are available to connected users only.','error');try{liveCallPeerId=userId;liveCallKind=kind;liveIncoming=false;callState={muted:false,spk:false,cam:true};liveLocalStream=await navigator.mediaDevices.getUserMedia({audio:true,video:kind==='video'});setupLiveCallMedia(kind);livePeer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});liveLocalStream.getTracks().forEach(t=>livePeer.addTrack(t,liveLocalStream));livePeer.onicecandidate=e=>{if(e.candidate)sendCallSignal(userId,kind,'ice',e.candidate.toJSON()).catch(console.warn)};livePeer.ontrack=e=>{if(kind==='video'){setupLiveCallMedia('video');const el=document.getElementById('live-remote-media');if(el){el.srcObject=e.streams[0];el.play().catch(()=>{});}}else{let el=document.getElementById('live-remote-media');if(!el){el=document.createElement('audio');el.id='live-remote-media';el.autoplay=true;el.className='hidden';$('call-scr').appendChild(el)}el.srcObject=e.streams[0];el.play().catch(()=>{})}};$('call-av').src=userById(userId)?.avatar||'';$('call-name').textContent=userById(userId)?.name||'Connection';$('call-sub').textContent='Ringing…';$('call-answer').classList.add('hidden');$('call-scr').classList.remove('hidden');$('call-scr').classList.add('flex');livePeer.onconnectionstatechange=()=>{if(livePeer?.connectionState==='connected'){$('call-sub').textContent='Connected';startLiveCallTimer()}else if(['failed','disconnected'].includes(livePeer?.connectionState))$('call-sub').textContent='Connection interrupted'};const offer=await livePeer.createOffer();await livePeer.setLocalDescription(offer);await sendCallSignal(userId,kind,'offer',offer)}catch(e){await cleanupLiveCall();toast('Could not start call: '+e.message,'error')}}
+async function startLiveCall(kind,userId){userId=userId||chatById(activeChat)?.userId;if(!userId||!liveConnected(userId))return toast('Calls are available to connected users only.','error');try{liveCallPeerId=userId;liveCallKind=kind;liveIncoming=false;callState={muted:false,spk:false,cam:true};liveLocalStream=await navigator.mediaDevices.getUserMedia({audio:true,video:kind==='video'});setupLiveCallMedia(kind);livePeer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});liveLocalStream.getTracks().forEach(t=>livePeer.addTrack(t,liveLocalStream));livePeer.onicecandidate=e=>{if(e.candidate)sendCallSignal(userId,kind,'ice',e.candidate.toJSON()).catch(console.warn)};livePeer.ontrack=e=>{if(liveCallKind==='video'){setupLiveCallMedia('video');const el=document.getElementById('live-remote-media');if(el){el.srcObject=e.streams[0];el.play().catch(()=>{});}}else{let el=document.getElementById('live-remote-media');if(!el){el=document.createElement('audio');el.id='live-remote-media';el.autoplay=true;el.className='hidden';$('call-scr').appendChild(el)}el.srcObject=e.streams[0];el.play().catch(()=>{})}};$('call-av').src=userById(userId)?.avatar||'';$('call-name').textContent=userById(userId)?.name||'Connection';$('call-sub').textContent='Ringing…';$('call-answer').classList.add('hidden');$('call-scr').classList.remove('hidden');$('call-scr').classList.add('flex');livePeer.onconnectionstatechange=()=>{if(livePeer?.connectionState==='connected'){$('call-sub').textContent='Connected';startLiveCallTimer()}else if(['failed','disconnected'].includes(livePeer?.connectionState))$('call-sub').textContent='Connection interrupted'};const offer=await livePeer.createOffer();await livePeer.setLocalDescription(offer);await sendCallSignal(userId,kind,'offer',offer)}catch(e){await cleanupLiveCall();toast('Could not start call: '+e.message,'error')}}
 async function answerLiveCall(){try{if(window.__sftRingStop)window.__sftRingStop();$('call-answer').classList.add('hidden');callState={muted:false,spk:false,cam:true};liveLocalStream=await navigator.mediaDevices.getUserMedia({audio:true,video:liveCallKind==='video'});setupLiveCallMedia(liveCallKind);livePeer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});liveLocalStream.getTracks().forEach(t=>livePeer.addTrack(t,liveLocalStream));livePeer.onicecandidate=e=>{if(e.candidate)sendCallSignal(liveCallPeerId,liveCallKind,'ice',e.candidate.toJSON()).catch(console.warn)};livePeer.ontrack=e=>{if(kind==='video'){setupLiveCallMedia('video');const el=document.getElementById('live-remote-media');if(el){el.srcObject=e.streams[0];el.play().catch(()=>{});}}else{let el=document.getElementById('live-remote-media');if(!el){el=document.createElement('audio');el.id='live-remote-media';el.autoplay=true;el.className='hidden';$('call-scr').appendChild(el)}el.srcObject=e.streams[0];el.play().catch(()=>{})}};const {data,error}=await getSupabase().from('call_signals').select('payload').eq('recipient_id',S.currentUserId).eq('caller_id',liveCallPeerId).eq('signal_type','offer').order('created_at',{ascending:false}).limit(1);if(error||!data?.[0])throw error||new Error('Call offer expired');await livePeer.setRemoteDescription(data[0].payload);const {data:iceRows}=await getSupabase().from('call_signals').select('payload').eq('recipient_id',S.currentUserId).eq('caller_id',liveCallPeerId).eq('signal_type','ice');for(const ice of iceRows||[])try{await livePeer.addIceCandidate(ice.payload)}catch{}const answer=await livePeer.createAnswer();await livePeer.setLocalDescription(answer);await sendCallSignal(liveCallPeerId,liveCallKind,'answer',answer);livePeer.onconnectionstatechange=()=>{if(livePeer?.connectionState==='connected'){$('call-sub').textContent='Connected';startLiveCallTimer()}};$('call-sub').textContent='Connecting…'}catch(e){toast('Could not answer: '+e.message,'error');cleanupLiveCall()}}
 function startLiveCallTimer(){if(callTimer)clearInterval(callTimer);callSec=0;$('call-tmr').classList.remove('hidden');callTimer=setInterval(()=>{$('call-tmr').textContent=String(Math.floor(++callSec/60)).padStart(2,'0')+':'+String(callSec%60).padStart(2,'0')},1000)}
 async function cleanupLiveCall(){pendingLiveIce=[];if(window.__sftRingStop){try{window.__sftRingStop()}catch{}window.__sftRingStop=null}if(livePeer){livePeer.close();livePeer=null}if(liveLocalStream){liveLocalStream.getTracks().forEach(t=>t.stop());liveLocalStream=null}document.getElementById('live-remote-media')?.remove();document.getElementById('live-local-media')?.remove();$('call-flip')?.classList.add('hidden');$('call-flip')?.classList.remove('flex');$('call-cam')?.classList.add('hidden');$('call-cam')?.classList.remove('flex');$('call-answer')?.classList.add('hidden');$('call-scr')?.classList.add('hidden');$('call-scr')?.classList.remove('flex');if(callTimer)clearInterval(callTimer);callTimer=null;liveIncoming=false;liveCallPeerId=null}
@@ -1838,35 +1838,15 @@ let callTimer = null, callSec = 0;
 let callState = { muted: false, spk: false, cam: true };
 function startCall(kind, userId) {
   if (!userId) {
-    const c = chatById(activeChat);
-    if (c && c.type === 'dm') userId = c.userId;
+    const current = chatById(activeChat);
+    if (current && current.type === 'dm') userId = current.userId;
     else return toast('Select a user to call', 'info');
   }
-  const u = userById(userId);
-  if (!u) return;
-  $('call-av').src = u.avatar;
-  $('call-name').textContent = u.name;
-  $('call-sub').textContent = kind === 'video' ? 'Starting video call…' : 'Calling…';
-  $('call-cam').classList.toggle('hidden', kind !== 'video');
-  $('call-vid').classList.toggle('hidden', kind !== 'video');
-  $('call-vid').classList.toggle('flex', kind === 'video');
-  $('call-scr').classList.remove('hidden');
-  $('call-scr').classList.add('flex');
-  callSec = 0; $('call-tmr').classList.add('hidden');
-  callState = { muted: false, spk: false, cam: true };
-  $('call-mute').className = 'w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center';
-  $('call-spk').className = 'w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center';
-  $('call-cam').className = 'w-14 h-14 rounded-full bg-gray-800 text-white flex items-center justify-center';
-  setTimeout(() => {
-    $('call-sub').textContent = 'Connected';
-    $('call-tmr').classList.remove('hidden');
-    callTimer = setInterval(() => {
-      callSec++;
-      const m = String(Math.floor(callSec/60)).padStart(2,'0');
-      const s = String(callSec%60).padStart(2,'0');
-      $('call-tmr').textContent = `${m}:${s}`;
-    }, 1000);
-  }, 1500);
+  const user = userById(userId);
+  if (!user) return toast('User not found', 'error');
+  // Always use the authenticated WebRTC signaling flow; never display a fake
+  // connected state before a peer connection has actually been established.
+  return startLiveCall(kind, userId);
 }
 function callToggle(k) {
  if(k==='mute'){callState.muted=!callState.muted;if(liveLocalStream)liveLocalStream.getAudioTracks().forEach(t=>t.enabled=!callState.muted);const b=$('call-mute');b.className='w-14 h-14 rounded-full '+(callState.muted?'bg-red-600 text-white':'bg-gray-800 text-white')+' flex items-center justify-center';b.innerHTML='<i class="fa-solid '+(callState.muted?'fa-microphone-slash':'fa-microphone')+'"></i>';b.title=callState.muted?'Unmute microphone':'Mute microphone';return;}
@@ -1874,19 +1854,8 @@ function callToggle(k) {
  if(k==='spk'){callState.spk=!callState.spk;const remote=document.getElementById('live-remote-media');if(remote&&remote.tagName==='AUDIO')remote.muted=callState.spk;else if(remote&&remote.tagName==='VIDEO')remote.muted=callState.spk;const b=$('call-spk');b.className='w-14 h-14 rounded-full '+(callState.spk?'bg-red-600 text-white':'bg-gray-800 text-white')+' flex items-center justify-center';b.innerHTML='<i class="fa-solid '+(callState.spk?'fa-volume-xmark':'fa-volume-high')+'"></i>';b.title=callState.spk?'Turn call audio on':'Mute call audio';}
 }
 function endCall() {
-  clearInterval(callTimer);
-  $('call-scr').classList.add('hidden');
-  $('call-scr').classList.remove('flex');
-  $('call-vid').classList.add('hidden');
-  $('call-vid').classList.remove('flex');
-  if (callSec > 0) {
-    const c = chatById(activeChat);
-    if (c && c.type === 'dm') {
-      S.calls.unshift({ id:'cl'+uid(), userId:c.userId, kind:callState.cam?'video':'audio', direction:'out', duration:callSec, at:now(), missed:false });
-      saveState();
-    }
-    toast(`Call ended · ${Math.floor(callSec/60)}m ${callSec%60}s`, 'info');
-  }
+  // Hang up through the live signaling channel and release microphone/camera.
+  return endLiveCall();
 }
 function renderCalls() {
   const el = $('call-list');
