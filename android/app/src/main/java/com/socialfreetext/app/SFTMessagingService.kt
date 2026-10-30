@@ -24,7 +24,7 @@ class SFTMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
-        val kind = data["kind"] ?: "message"
+        val kind = data["kind"] ?: data["type"] ?: "message"
         val isCall = kind == "call"
         val title = message.notification?.title ?: data["title"] ?: if (isCall) "Incoming call" else "New message"
         val body = message.notification?.body ?: data["body"] ?: "Open SocialfreeText to view."
@@ -85,8 +85,8 @@ class SFTMessagingService : FirebaseMessagingService() {
     }
 
     companion object {
-        const val CALL_CHANNEL = "sft_calls_v1"
-        const val MESSAGE_CHANNEL = "sft_messages_v1"
+        const val CALL_CHANNEL = "sft_calls_v2"
+        const val MESSAGE_CHANNEL = "sft_messages_v2"
         const val CALL_NOTIFICATION_ID = 7501
 
         fun callChannel(): NotificationChannel {
@@ -98,6 +98,7 @@ class SFTMessagingService : FirebaseMessagingService() {
                 vibrationPattern = longArrayOf(0, 900, 400, 900, 400, 1200)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setBypassDnd(false)
+                setSound(sound, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             }
         }
 
@@ -105,6 +106,7 @@ class SFTMessagingService : FirebaseMessagingService() {
             return NotificationChannel(MESSAGE_CHANNEL, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "New SocialfreeText messages"
                 enableVibration(true)
+                setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
                 lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             }
         }
