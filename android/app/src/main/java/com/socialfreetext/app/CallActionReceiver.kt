@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.RemoteInput
 
 class CallActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -24,10 +25,14 @@ class CallActionReceiver : BroadcastReceiver() {
             return
         }
         if (action == "reply") {
+            val replyText = RemoteInput.getResultsFromIntent(intent)
+                ?.getCharSequence(ReplyReceiver.KEY_TEXT)?.toString()?.trim().orEmpty()
+            if (replyText.isBlank()) return
             val launch = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra("target", "reply")
                 putExtra("sender_id", intent.getStringExtra("sender_id"))
+                putExtra("notification_reply_text", replyText)
             }
             context.startActivity(launch)
         }
