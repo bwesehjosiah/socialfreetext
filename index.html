@@ -1470,6 +1470,30 @@ async function loadLiveChats() {
   saveState();
   renderChats();
 }
+let pendingSFTNativeAction = null;
+window.receiveSFTNativeAction = function(payload) {
+  try {
+    const action = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    if (action && action.type === 'reply' && action.senderId && action.text) {
+      pendingSFTNativeAction = action;
+      if (S.currentUserId) processSFTNativeAction();
+    }
+  } catch (error) { console.warn('Could not read notification action:', error.message); }
+};
+async function processSFTNativeAction() {
+  const action = pendingSFTNativeAction;
+  if (!action || !S.currentUserId) return;
+  pendingSFTNativeAction = null;
+  if (action.type !== 'reply' || !action.senderId || !action.text) return;
+  const chat = S.chats.find(item => item.type === 'dm' && item.userId === action.senderId);
+  if (!chat) { toast('Could not find that conversation. Open Chats and try again.', 'error'); return; }
+  openConv(chat.id);
+  const input = $('msg-in');
+  if (!input) return;
+  input.value = action.text;
+  autoGrow(input);
+  await sendMsg();
+};
 function initUI() {
   const u = me();
   ensureE2EEKeys(S.currentUserId).catch(e=>console.warn('Encryption setup:',e.message)); subscribeLivePresence(); subscribeLiveMessages(); subscribeLiveCalls();
@@ -1482,7 +1506,7 @@ function initUI() {
   renderNotifs();
   S.chats = [];
   renderChats();
-  loadLiveChats().catch(error=>{console.warn('Could not load live chats:',error.message);toast('Could not load your conversations. Please refresh.','error');});
+  loadLiveChats().then(()=>{if(pendingSFTNativeAction)processSFTNativeAction()}).catch(error=>{console.warn('Could not load live chats:',error.message);toast('Could not load your conversations. Please refresh.','error');});
   subscribePeopleRealtime();
   loadPeople().catch(error=>console.warn('People load:',error.message));
   go('chats');
