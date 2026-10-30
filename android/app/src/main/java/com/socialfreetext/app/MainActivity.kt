@@ -9,6 +9,7 @@ import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import org.json.JSONObject
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -25,7 +26,12 @@ class MainActivity : AppCompatActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    super.onPageFinished(view, url)
+                    if (url.startsWith(APP_URL)) dispatchPendingNotificationReply()
+                }
+            }
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest) {
                     runOnUiThread {
@@ -65,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(webView)
         webView.loadUrl(targetUrl(intent?.getStringExtra("target")))
+        captureNotificationReply(intent)
     }
 
     @Deprecated("Deprecated in Android API")
@@ -84,9 +91,31 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (::webView.isInitialized) webView.loadUrl(targetUrl(intent.getStringExtra("target")))
+        captureNotificationReply(intent)
+        if (::webView.isInitialized) {
+            if (webView.url?.startsWith(APP_URL) == true) dispatchPendingNotificationReply()
+            else webView.loadUrl(targetUrl(intent.getStringExtra("target")))
+        }
     }
 
+    private var pendingNotificationReply: Pair<String, String>? = null
+
+    private fun captureNotificationReply(source: android.content.Intent?) {
+        val senderId = source?.getStringExtra("sender_id") ?: return
+        val replyText = source.getStringExtra("notification_reply_text") ?: return
+        if (replyText.isBlank()) return
+        pendingNotificationReply = senderId to replyText
+        source.removeExtra("notification_reply_text")
+    }
+
+    private fun dispatchPendingNotificationReply() {
+        val pending = pendingNotificationReply ?: return
+        val payload = JSONObject().put("type", "reply")
+            .put("senderId", pending.first).put("text", pending.second).toString()
+        val script = "window.receiveSFTNativeAction && window.receiveSFTNativeAction(" + JSONObject.quote(payload) + ")"
+        webView.evaluateJavascript(script, null)
+        pendingNotificationReply = null
+    }
     private fun targetUrl(target: String?): String = when (target) {
         "call" -> "$APP_URL/?open=calls"
         "reply" -> "$APP_URL/?open=chats&reply=1"
