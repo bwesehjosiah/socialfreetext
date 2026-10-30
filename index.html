@@ -94,9 +94,10 @@ tailwind.config = {
   <h1 class="text-2xl font-black tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
     SocialfreeText
   </h1>
-  <p class="text-[11px] text-gray-500 mt-2 tracking-[0.2em] uppercase animate-pulse">
-    Initializing BOI Engine &amp; AI Hub…
+  <p id="loader-message" class="text-[11px] text-gray-500 mt-2 tracking-[0.2em] uppercase animate-pulse">
+    Initializing SocialfreeText…
   </p>
+  <button id="session-retry" type="button" class="hidden mt-5 px-5 py-3 rounded-xl bg-brand-600 text-white text-sm font-bold" onclick="init()">Retry connection</button>
 </div>
 
 <!-- ══════════ AUTH ══════════ -->
@@ -2947,19 +2948,33 @@ async function init() {
       $('auth-screen').classList.add('hidden');
       $('app').classList.remove('hidden');
       initUI();
+      $('loader').classList.add('hidden');
     } else {
       // Only show login after Supabase confirms there is no saved session.
       $('app').classList.add('hidden');
       $('auth-screen').classList.remove('hidden');
       showAuth('login');
+      $('loader').classList.add('hidden');
     }
   } catch (error) {
-    // A temporary network/profile error must not silently sign the user out.
+    // A temporary network/profile error is not proof that the user is signed out.
+    // Keep the auth and app screens hidden so we never ask for credentials just
+    // because the network or profile query failed. Let the user retry restoration.
     console.warn('SocialfreeText session restore:', error.message);
     $('app').classList.add('hidden');
-    $('auth-screen').classList.remove('hidden');
-    showAuth('login');
-    toast('Could not restore your session. Check your connection and try again.', 'error');
+    $('auth-screen').classList.add('hidden');
+    const loader = $('loader');
+    const message = $('loader-message');
+    const retry = $('session-retry');
+    if (message) {
+      message.textContent = 'Connection problem. Your saved sign-in has not been cleared.';
+      message.classList.remove('animate-pulse');
+    }
+    if (retry) retry.classList.remove('hidden');
+    if (loader) {
+      loader.classList.remove('hidden');
+      loader.style.opacity = '1';
+    }
     if (emailWasVerified) showEmailVerifiedOverlay();
   }
 }
