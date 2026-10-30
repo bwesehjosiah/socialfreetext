@@ -837,6 +837,9 @@ tailwind.config = {
       <button onclick="closeModal('e2ee-recovery-modal')" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <p id="e2ee-recovery-help" class="text-xs text-gray-500 mb-3">Create a recovery key to protect a backup of your private messaging key.</p>
+    <div id="e2ee-recovery-create-wrap" class="hidden">
+      <button onclick="createE2EERecoveryBackup()" class="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">Create encrypted recovery backup</button>
+    </div>
     <div id="e2ee-recovery-key-wrap" class="hidden">
       <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">YOUR ONE-TIME RECOVERY KEY</label>
       <textarea id="e2ee-recovery-key-display" readonly rows="3" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-mono break-all"></textarea>
@@ -1676,6 +1679,7 @@ async function deriveE2EEBackupKey(recoveryKey,salt){
  return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations:600000},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
 function openE2EERecovery(){
+ $('e2ee-recovery-create-wrap').classList.add('hidden');
  $('e2ee-recovery-key-wrap').classList.add('hidden');
  $('e2ee-recovery-restore-wrap').classList.add('hidden');
  $('e2ee-recovery-help').textContent='Create a recovery key on this device, or restore your existing encrypted message key on a new device.';
@@ -1686,7 +1690,7 @@ function openE2EERecovery(){
  getSupabase().from('e2ee_key_backups').select('user_id').eq('user_id',S.currentUserId).maybeSingle().then(({data,error})=>{
    if(error){toast('Could not check recovery backup: '+error.message,'error');return}
    if(data){$('e2ee-recovery-restore-wrap').classList.remove('hidden');$('e2ee-recovery-help').textContent='This account has an encrypted key backup. Enter the recovery key you saved when you created it.'}
-   else{$('e2ee-recovery-help').textContent='Create a recovery key on this device before switching phones or clearing app data.'}
+   else{$('e2ee-recovery-create-wrap').classList.remove('hidden');$('e2ee-recovery-help').textContent='Create a recovery key on this device before switching phones or clearing app data.'}
  }).catch(e=>toast(e.message,'error'));
 }
 async function createE2EERecoveryBackup(){
@@ -1704,6 +1708,7 @@ async function createE2EERecoveryBackup(){
   const {error}=await getSupabase().from('e2ee_key_backups').upsert({user_id:uid,backup},{onConflict:'user_id'});
   if(error)throw error;
   $('e2ee-recovery-key-display').value=recoveryKey;
+  $('e2ee-recovery-create-wrap').classList.add('hidden');
   $('e2ee-recovery-restore-wrap').classList.add('hidden');
   $('e2ee-recovery-key-wrap').classList.remove('hidden');
   $('e2ee-recovery-help').textContent='Your encrypted key backup is ready. Save this recovery key now; it will not be shown again.';
