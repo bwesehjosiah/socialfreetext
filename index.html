@@ -3216,21 +3216,33 @@ async function init() {
 }
 
 // ══════════ SPLASH SCREEN LOGIC ══════════
-// Waits for all assets (Tailwind, FontAwesome, fonts) to load first
-// Then keeps the splash visible for 1.5 seconds before fading out
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    const loader = $('loader');
+// Start from DOM readiness rather than waiting indefinitely for every remote
+// font/icon/style asset. A once-guard prevents duplicate session restoration.
+let sftStartupStarted = false;
+function startSocialfreeText() {
+  if (sftStartupStarted) return;
+  sftStartupStarted = true;
+  const loader = $('loader');
+  if (loader) {
     loader.style.opacity = '0';
-    // After fade transition completes (700ms), hide loader and init app
     setTimeout(() => {
       loader.classList.add('hidden');
       loader.style.opacity = '';
       init();
       window.addEventListener('hashchange', checkAdminHash);
-    }, 700);
-  }, 1500); // ← Change this to 2500 if you want it slower, or 800 for faster
-});
+    }, 250);
+  } else {
+    init();
+    window.addEventListener('hashchange', checkAdminHash);
+  }
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startSocialfreeText, { once: true });
+} else {
+  startSocialfreeText();
+}
+// Fallback for embedded WebViews or pages where DOMContentLoaded is delayed.
+setTimeout(startSocialfreeText, 4000);
 
 // Sidebar / mobile nav
 $('burger')?.addEventListener('click', () => {
