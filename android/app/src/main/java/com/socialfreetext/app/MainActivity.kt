@@ -14,6 +14,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import org.json.JSONObject
@@ -32,6 +33,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
         requestNotificationPermission()
         createNotificationChannels()
 
@@ -58,6 +61,8 @@ class MainActivity : AppCompatActivity() {
                         hideLoading()
                         installClickHook()
                         dispatchPendingNotificationReply()
+                        dispatchPendingCallAction()
+                        dispatchFcmToken()
                     }
                 }
             }
@@ -112,6 +117,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(root)
         webView.loadUrl(targetUrl(intent?.getStringExtra("target")))
         captureNotificationReply(intent)
+        capturePendingCallAction(intent)
+        requestFcmToken()
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -174,13 +181,45 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureNotificationReply(intent)
+        capturePendingCallAction(intent)
         if (::webView.isInitialized) {
-            if (webView.url?.startsWith(APP_URL) == true) dispatchPendingNotificationReply()
+            if (webView.url?.startsWith(APP_URL) == true) { dispatchPendingNotificationReply(); dispatchPendingCallAction() }
             else webView.loadUrl(targetUrl(intent.getStringExtra("target")))
         }
     }
 
     private var pendingNotificationReply: Pair<String, String>? = null
+    private var pendingCallAction: Pair<String, String>? = null
+    private var pendingFcmToken: String? = null
+
+    private fun capturePendingCallAction(source: android.content.Intent?) {
+        val action = source?.getStringExtra("pending_call_action") ?: return
+        val senderId = source.getStringExtra("sender_id") ?: return
+        if (action != "answer" && action != "reject") return
+        pendingCallAction = action to senderId
+        source.removeExtra("pending_call_action")
+    }
+
+    private fun dispatchPendingCallAction() {
+        val pending = pendingCallAction ?: return
+        val payload = JSONObject().put("type", "call_action").put("action", pending.first).put("senderId", pending.second).toString()
+        val script = "window.receiveSFTNativeAction && window.receiveSFTNativeAction(" + JSONObject.quote(payload) + ")"
+        webView.evaluateJavascript(script) { result -> if (result == "true") pendingCallAction = null }
+    }
+
+    private fun requestFcmToken() {
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            pendingFcmToken = token
+            if (::webView.isInitialized) dispatchFcmToken()
+        }
+    }
+
+    private fun dispatchFcmToken() {
+        val token = pendingFcmToken ?: return
+        val payload = JSONObject().put("type", "fcm_token").put("token", token).toString()
+        val script = "window.receiveSFTNativeAction && window.receiveSFTNativeAction(" + JSONObject.quote(payload) + ")"
+        webView.evaluateJavascript(script) { result -> if (result == "true") pendingFcmToken = null }
+    }
     private fun captureNotificationReply(source: android.content.Intent?) {
         val senderId = source?.getStringExtra("sender_id") ?: return
         val replyText = source.getStringExtra("notification_reply_text") ?: return
