@@ -899,75 +899,16 @@ const STOCK_MEDIA = [
 
 /* ── Seed state ── */
 function seed() {
-  const admin = {
-    id: 'u_admin', name: 'Boi Achiver', username: 'boiachiver',
-    email: 'admin@socialfreetext.com', password: 'admin123',
-    avatar: IMG_POOL[0], bio: 'Creator of SocialfreeText. Building the future of social. ⚡',
-    role: 'Super Admin', status: 'active', verified: true,
-    followers: 124800, following: 312,
-    recoveryEmail: '', blocked: [], twoFA: false,
-    joinedAt: now() - 86400000*400
-  };
-  const users = [
-    admin,
-    { id:'u1', name:'Alexander Wright', username:'alexw', email:'alex@demo.com', password:'demo123', avatar:IMG_POOL[1], bio:'Product designer.', role:'User', status:'active', verified:true, followers:45200, following:890, blocked:[], twoFA:false, joinedAt:now()-86400000*200 },
-    { id:'u2', name:'Elena Rostova', username:'elenar', email:'elena@demo.com', password:'demo123', avatar:IMG_POOL[2], bio:'AI researcher.', role:'User', status:'active', verified:true, followers:78400, following:512, blocked:[], twoFA:false, joinedAt:now()-86400000*300 },
-    { id:'u3', name:'Marcus Vance', username:'marcusv', email:'marcus@demo.com', password:'demo123', avatar:IMG_POOL[3], bio:'Full-stack dev.', role:'User', status:'active', verified:false, followers:12400, following:340, blocked:[], twoFA:false, joinedAt:now()-86400000*150 },
-    { id:'u4', name:'Sofia Lindgren', username:'sofial', email:'sofia@demo.com', password:'demo123', avatar:IMG_POOL[4], bio:'Photographer.', role:'User', status:'active', verified:false, followers:32100, following:220, blocked:[], twoFA:false, joinedAt:now()-86400000*180 },
-    { id:'u5', name:'Daniel Okafor', username:'danok', email:'daniel@demo.com', password:'demo123', avatar:IMG_POOL[5], bio:'Founder.', role:'User', status:'active', verified:true, followers:8900, following:410, blocked:[], twoFA:false, joinedAt:now()-86400000*90 }
-  ];
-  const chats = [
-    { id:'c1', type:'dm', userId:'u1', lastMsg:'Are we good for the WebRTC test?', lastTime:now()-60000*2, unread:2 },
-    { id:'c2', type:'dm', userId:'u2', lastMsg:'The new UI design looks fantastic!', lastTime:now()-60000*18, unread:1 },
-    { id:'c3', type:'dm', userId:'u3', lastMsg:'Shipped the admin dashboard 🎉', lastTime:now()-3600000, unread:0 },
-    { id:'c4', type:'dm', userId:'u4', lastMsg:'Sent you the mockups.', lastTime:now()-3600000*3, unread:0 },
-    { id:'g1', type:'group', name:'Achivers Team', avatar:IMG_POOL[3], memberIds:['u_admin','u1','u2','u3'], admins:['u_admin'], lastMsg:'Alex: Let\'s ship it', lastTime:now()-60000*5, unread:3, createdBy:'u_admin' }
-  ];
-  const messages = {
-    c1:[{id:'m1',from:'u1',type:'text',text:'Hey! Testing out the new features.',at:now()-60000*10},{id:'m2',from:'u_admin',type:'text',text:'Everything works perfectly.',at:now()-60000*8,read:true},{id:'m3',from:'u1',type:'text',text:'Are we good for the WebRTC test?',at:now()-60000*2}],
-    c2:[{id:'m4',from:'u2',type:'text',text:'The new UI design looks fantastic!',at:now()-60000*18}],
-    c3:[{id:'m5',from:'u3',type:'text',text:'Shipped the admin dashboard 🎉',at:now()-3600000}],
-    c4:[{id:'m6',from:'u4',type:'image',text:STOCK_MEDIA[2],at:now()-3600000*3}],
-    g1:[{id:'m7',from:'u1',type:'text',text:'Kickoff in 5!',at:now()-60000*20},{id:'m8',from:'u2',type:'text',text:'Ready 🚀',at:now()-60000*15},{id:'m9',from:'u1',type:'text',text:'Let\'s ship it',at:now()-60000*5}]
-  };
-  const statuses = [
-    {id:'s1',userId:'u1',type:'photo',media:STOCK_MEDIA[0],caption:'Morning hike ⛰️',music:'',bg:'',at:now()-60000*20,viewers:['u2','u3'],reactions:{'❤️':2}},
-    {id:'s2',userId:'u2',type:'text',text:'Deep work mode 🧠',bg:'bg-gradient-to-br from-indigo-500 to-purple-600',caption:'',music:'',at:now()-3600000,viewers:['u1'],reactions:{'👏':3}},
-    {id:'s3',userId:'u3',type:'photo',media:STOCK_MEDIA[1],caption:'Shipping day 🚀',music:'Lo-Fi Beats',bg:'',at:now()-3600000*3,viewers:[],reactions:{}}
-  ];
-  const calls = [
-    {id:'cl1',userId:'u1',kind:'video',direction:'out',duration:145,at:now()-3600000*2,missed:false},
-    {id:'cl2',userId:'u2',kind:'audio',direction:'in',duration:320,at:now()-3600000*5,missed:false},
-    {id:'cl3',userId:'u3',kind:'audio',direction:'in',duration:0,at:now()-86400000,missed:true}
-  ];
-  const communities = [
-    {id:'co1',name:'Tech Enthusiasts',desc:'Latest in tech, AI and startups.',emoji:'💻',members:12400,channels:[{id:'ch1',name:'general',posts:234},{id:'ch2',name:'announcements',posts:45}],createdBy:'u_admin',admins:['u_admin']},
-    {id:'co2',name:'Web3 Builders',desc:'Crypto, DeFi and dApps.',emoji:'🔗',members:8100,channels:[{id:'ch4',name:'general',posts:156}],createdBy:'u_admin',admins:['u_admin']}
-  ];
-  const notifications = [
-    {id:'n1',icon:'fa-heart',color:'text-red-500',text:'<b>Elena Rostova</b> liked your status.',at:now()-60000*2,read:false},
-    {id:'n2',icon:'fa-comment',color:'text-brand-500',text:'<b>Marcus Vance</b> replied to your message.',at:now()-3600000,read:false},
-    {id:'n3',icon:'fa-phone',color:'text-emerald-500',text:'Missed call from <b>Marcus Vance</b>.',at:now()-86400000,read:true}
-  ];
-  const flags = [
-    {id:'fl1',type:'Message',preview:'"Buy cheap crypto now…"',by:'u3',severity:'high'},
-    {id:'fl2',type:'Status',preview:'Suspicious link detected',by:'auto-filter',severity:'medium'}
-  ];
-  const logs = [
-    '[boot] SocialfreeText v3.1 initialised',
-    '[auth] Session created for boiachiver',
-    '[ai] Boi AchiverAI ready — local reasoning mode',
-    '[sync] Local storage engine online',
-    '[net] No backend — fully offline capable'
-  ];
+  // Start with an empty, production-safe state. Real users and conversations are loaded
+  // from Supabase after authentication; never populate the app with fictional accounts.
   return {
-    theme:'dark', currentUserId:null, users, chats, messages, statuses, calls,
-    communities, notifications, flags, logs, joinedCommunities:['co1'],
-    aiHistory:[], settings:{ sounds:true, autoReply:true, theme:'dark', mediaAuto:false, aiSuggest:true },
+    theme:'dark', currentUserId:null, users:[], chats:[], messages:{},
+    statuses:[], calls:[], communities:[], notifications:[], flags:[], logs:[],
+    joinedCommunities:[], aiHistory:[],
+    settings:{sounds:true,autoReply:false,theme:'dark',mediaAuto:false,aiSuggest:true},
     aiRequests:0
   };
 }
-
 let S = loadState();
 function loadState() {
   try {
@@ -979,9 +920,24 @@ function loadState() {
 function saveState() {
   try { localStorage.setItem('sft_v3', JSON.stringify(S)); } catch {}
 }
-// Remove legacy prototype passwords from browser storage immediately. Authentication is handled
-// by Supabase Auth; local demo passwords must never be retained or accepted.
-if (Array.isArray(S.users)) S.users.forEach(user => { if (user && Object.prototype.hasOwnProperty.call(user, 'password')) delete user.password; });
+// Purge legacy fictional demo accounts and their sample conversations from existing
+// browser storage. Keep real cached profiles and real conversations intact.
+const legacyDemoIds = new Set(['u_admin','u1','u2','u3','u4','u5']);
+if (Array.isArray(S.users)) {
+  S.users = S.users.filter(user => user && !legacyDemoIds.has(user.id) && !String(user.email||'').endsWith('@demo.com'));
+  S.users.forEach(user => { if (Object.prototype.hasOwnProperty.call(user, 'password')) delete user.password; });
+}
+if (!Array.isArray(S.chats)) S.chats = [];
+S.chats = S.chats.filter(chat => chat && !['c1','c2','c3','c4','g1'].includes(chat.id) && !legacyDemoIds.has(chat.userId));
+if (!S.messages || typeof S.messages !== 'object') S.messages = {};
+['c1','c2','c3','c4','g1'].forEach(id => delete S.messages[id]);
+if (Array.isArray(S.statuses)) S.statuses = S.statuses.filter(item => !legacyDemoIds.has(item.userId));
+if (Array.isArray(S.calls)) S.calls = S.calls.filter(item => !legacyDemoIds.has(item.userId));
+if (Array.isArray(S.notifications)) S.notifications = [];
+if (Array.isArray(S.communities)) S.communities = [];
+if (Array.isArray(S.flags)) S.flags = [];
+if (Array.isArray(S.logs)) S.logs = [];
+S.joinedCommunities = [];
 S.currentUserId = null;
 saveState();
 const me = () => S.users.find(u => u.id === S.currentUserId);
@@ -1406,6 +1362,48 @@ function go(view) {
   if (view === 'search') { $('search-q').value=''; renderSearch(); setTimeout(()=>$('search-q').focus(),100); }
 }
 
+async function loadLiveChats() {
+  const meId = S.currentUserId;
+  if (!meId) return;
+  const client = getSupabase();
+  const {data,error} = await client.from('messages')
+    .select('id,sender_id,recipient_id,body,created_at,read_at')
+    .or('sender_id.eq.'+meId+',recipient_id.eq.'+meId)
+    .order('created_at',{ascending:false}).limit(500);
+  if (error) throw error;
+  const rows = data || [];
+  const otherIds = [...new Set(rows.map(row => row.sender_id === meId ? row.recipient_id : row.sender_id).filter(Boolean))];
+  let profiles = [];
+  if (otherIds.length) {
+    const result = await client.from('profiles').select('id,username,display_name,avatar_url,bio').in('id',otherIds);
+    if (result.error) throw result.error;
+    profiles = result.data || [];
+  }
+  const profileMap = new Map(profiles.map(profile => [profile.id,profile]));
+  const chatMap = new Map();
+  for (const row of rows) {
+    const otherId = row.sender_id === meId ? row.recipient_id : row.sender_id;
+    if (!otherId) continue;
+    let chat = chatMap.get(otherId);
+    if (!chat) {
+      const profile = profileMap.get(otherId);
+      if (!profile) continue;
+      chat = {id:'dm_'+otherId,type:'dm',userId:otherId,lastMsg:'',lastTime:new Date(row.created_at).getTime(),unread:0};
+      chatMap.set(otherId,chat);
+      const user = {id:profile.id,name:profile.display_name||profile.username||'SocialfreeText user',username:profile.username||'',email:'',bio:profile.bio||'',avatar:profile.avatar_url||IMG_POOL[0],role:'User',status:'active'};
+      S.users = S.users.filter(existing => existing.id !== user.id);
+      S.users.push(user);
+    }
+    if (!chat.lastMsg) {
+      try { chat.lastMsg = await decryptDM(otherId,row.body); }
+      catch { chat.lastMsg = '🔒 Encrypted message'; }
+    }
+    if (row.recipient_id === meId && !row.read_at) chat.unread++;
+  }
+  S.chats = [...chatMap.values()];
+  saveState();
+  renderChats();
+}
 function initUI() {
   const u = me();
   ensureE2EEKeys(S.currentUserId).catch(e=>console.warn('Encryption setup:',e.message)); subscribeLivePresence(); subscribeLiveMessages(); subscribeLiveCalls();
@@ -1416,7 +1414,9 @@ function initUI() {
   const isAdmin = u.role === 'Admin' || u.role === 'Super Admin';
   $('nav-admin').classList.toggle('hidden', !isAdmin);
   renderNotifs();
+  S.chats = [];
   renderChats();
+  loadLiveChats().catch(error=>{console.warn('Could not load live chats:',error.message);toast('Could not load your conversations. Please refresh.','error');});
   subscribePeopleRealtime();
   loadPeople().catch(error=>console.warn('People load:',error.message));
   go('chats');
