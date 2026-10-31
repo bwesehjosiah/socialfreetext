@@ -1831,7 +1831,7 @@ function openE2EERecovery(){
      if(supported){$('e2ee-recovery-restore-wrap').classList.remove('hidden');$('e2ee-recovery-pin-restore').placeholder=b.version===2?'Original 4-digit PIN':'6-digit PIN';$('e2ee-recovery-pin-restore').setAttribute('pattern',b.version===2?'[0-9]{4}':'[0-9]{6}');const pinLabel=document.querySelector('label[for="e2ee-recovery-pin-restore"]');if(pinLabel)pinLabel.textContent='ENTER YOUR '+(b.version===2?'ORIGINAL 4-DIGIT':'6-DIGIT')+' RECOVERY PIN';}
      if(hasLocalKey)$('e2ee-recovery-create-wrap').classList.remove('hidden');
      $('e2ee-recovery-help').textContent=supported
-       ?(hasLocalKey?'A recovery backup already exists. You can restore it here or replace it with a new six-digit PIN.':'Enter your six-digit PIN to restore your encrypted message key.')
+       ?(hasLocalKey?'A recovery backup already exists. You can restore it here or replace it with a new six-digit PIN.':(b.version===2?'Enter the original four-digit PIN for this backup.':'Enter your six-digit PIN to restore your encrypted message key.'))
        :(hasLocalKey?'An older recovery backup exists. Create a new six-digit PIN-only backup from this original device to replace it.':'This older backup cannot be restored with the current PIN-only recovery screen. Keep the original device and create a new six-digit backup there before switching devices.');
    }else{
      $('e2ee-recovery-create-wrap').classList.remove('hidden');
