@@ -1659,6 +1659,7 @@ function openConv(id) {
         <p class="font-bold text-sm truncate">${esc(t)}</p>
         <p class="text-[11px] flex items-center gap-1.5"><span class="live-status-dot w-1.5 h-1.5 rounded-full"></span><span class="live-status-text">${esc(sub)}</span></p>
       </div>
+      ${c.type==='group'&&c.admins?.includes(S.currentUserId)?'<button onclick="openGroupMembersManager(\\''+c.id+'\\')" title="Manage group members" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-users-gear"></i></button>':''}
       <button onclick="startLiveCall('audio')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-phone"></i></button>
       <button onclick="startLiveCall('video')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-video"></i></button>
     </div>
@@ -2014,6 +2015,14 @@ async function removeGroupMemberAndRotate(groupId,memberId){
  const {data:group,error:groupError}=await client.from('group_chats').select('key_epoch,key_rotation_pending').eq('id',groupId).single();
  if(groupError)throw groupError;
  const nextEpoch=Number(group.key_epoch||1)+1;
+ const {data:beforeMembers,error:beforeError}=await client.from('group_chat_members').select('user_id').eq('group_id',groupId);
+ if(beforeError)throw beforeError;
+ const remainingIds=(beforeMembers||[]).map(m=>m.user_id).filter(id=>id!==memberId);
+ if(!remainingIds.includes(S.currentUserId))throw new Error('You must remain in the group to rotate its key.');
+ const {data:profiles,error:profileError}=await client.from('profiles').select('id,e2ee_public_key').in('id',remainingIds);
+ if(profileError)throw profileError;
+ const ready=new Set((profiles||[]).filter(p=>p.e2ee_public_key).map(p=>p.id));
+ if(remainingIds.some(id=>!ready.has(id)))throw new Error('Every remaining member must have an encrypted messaging key before this member can be removed.');
  const {error:lockError}=await client.from('group_chats').update({key_rotation_pending:true}).eq('id',groupId);
  if(lockError)throw lockError;
  try{
@@ -2689,6 +2698,21 @@ async function loadGroupMessages(groupId){
 function subscribeGroupMessages(groupId){
  if(window.sftGroupChannel){try{getSupabase().removeChannel(window.sftGroupChannel)}catch{}}
  window.sftGroupChannel=getSupabase().channel('group-'+groupId).on('postgres_changes',{event:'*',schema:'public',table:'group_chat_messages',filter:'group_id=eq.'+groupId},()=>loadGroupMessages(groupId).catch(console.warn)).subscribe();
+}
+async function openGroupMembersManager(groupId){
+ const chat=chatById(groupId);
+ if(!chat||chat.type!=='group'||!chat.admins?.includes(S.currentUserId))return toast('Only group admins can manage members.','error');
+ const {data:members,error}=await getSupabase().from('group_chat_members').select('user_id,role').eq('group_id',groupId);
+ if(error)return toast('Could not load group members: '+error.message,'error');
+ const ids=(members||[]).map(m=>m.user_id);
+ const {data:profiles}=await getSupabase().from('profiles').select('id,username,display_name,avatar_url').in('id',ids);
+ for(const p of profiles||[])if(!userById(p.id))S.users.push({id:p.id,name:p.display_name||p.username||'Member',username:p.username||'',avatar:p.avatar_url||IMG_POOL[0],role:'User'});
+ const rows=(members||[]).map(m=>{
+  const u=userById(m.user_id),isSelf=m.user_id===S.currentUserId;
+  return '<div class="flex items-center gap-3 p-3 border-b border-gray-100 dark:border-gray-800"><img src="'+esc(u?.avatar||IMG_POOL[0])+'" class="w-9 h-9 rounded-full object-cover"><div class="flex-1 min-w-0"><p class="text-sm font-bold truncate">'+esc(u?.name||'Member')+'</p><p class="text-[10px] text-gray-500">'+(m.role==='admin'?'Admin':'Member')+'</p></div>'+(isSelf?'<span class="text-xs text-gray-400">You</span>':'<button onclick="removeGroupMemberAndRotate(\''+groupId+'\',\''+m.user_id+'\').then(()=>{this.closest(\'#group-members-sheet\')?.remove();renderGroups();openGroupMembersManager(\''+groupId+'\')}).catch(()=>{})" class="text-xs font-bold text-red-500 px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30">Remove</button>')+'</div>';
+ }).join('');
+ document.getElementById('group-members-sheet')?.remove();
+ document.body.insertAdjacentHTML('beforeend','<div id="group-members-sheet" class="fixed inset-0 z-[190] bg-black/70 flex items-end md:items-center justify-center p-3"><div class="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-900"><div class="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800"><h3 class="font-black">Group members</h3><button onclick="this.closest(\'#group-members-sheet\').remove()" class="text-gray-500 p-2">Close</button></div>'+rows+'</div></div>');
 }
 function openGroupCreator() {
   const members = S.users.filter(u => u.id !== S.currentUserId);
