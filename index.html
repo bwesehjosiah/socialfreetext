@@ -1901,7 +1901,9 @@ async function createE2EERecoveryBackup(){
   if(existingBackup&&!window.confirm('Replace the existing recovery backup with a new six-digit PIN-only backup? Your current backup will remain until this replacement is saved.'))return;
   const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
   const iterations=1200000,wrappingKey=await deriveE2EEBackupKey(pin,salt,iterations);
-  const payload=new TextEncoder().encode(JSON.stringify({version:1,privateKey:saved.privateKey,publicKey:saved.publicKey}));
+  await cacheGroupKeysForRecovery(uid);
+  const groupKeys=Object.keys(localStorage).filter(k=>k.startsWith('sft-group-key-'+uid+'-')).map(key=>({key,value:localStorage.getItem(key)}));
+  const payload=new TextEncoder().encode(JSON.stringify({version:1,privateKey:saved.privateKey,publicKey:saved.publicKey,groupKeys}));
   const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},wrappingKey,payload);
   const backup={version:3,kdf:'PBKDF2-SHA-256',iterations,salt:e2eeBase64Url(salt),iv:e2eeBase64Url(iv),ciphertext:e2eeBase64Url(new Uint8Array(encrypted))};
   const {error}=await getSupabase().from('e2ee_key_backups').upsert({user_id:uid,backup},{onConflict:'user_id'});
@@ -1935,6 +1937,9 @@ async function restoreE2EERecoveryBackup(){
    const privateKey=await crypto.subtle.importKey('jwk',saved.privateKey,{name:'ECDH',namedCurve:'P-256'},false,['deriveKey']);
    await crypto.subtle.importKey('jwk',saved.publicKey,{name:'ECDH',namedCurve:'P-256'},true,[]);
    localStorage.setItem('sft-e2ee-'+uid,JSON.stringify({privateKey:saved.privateKey,publicKey:saved.publicKey}));
+   for(const item of Array.isArray(saved.groupKeys)?saved.groupKeys:[]){
+    if(item&&typeof item.key==='string'&&item.key.startsWith('sft-group-key-'+uid+'-')&&typeof item.value==='string')localStorage.setItem(item.key,item.value);
+   }
    liveKeyCache.set(uid,{privateKey,publicJwk:saved.publicKey});
    const {error:profileError}=await getSupabase().from('profiles').update({e2ee_public_key:JSON.stringify(saved.publicKey)}).eq('id',uid);
    if(profileError)throw profileError;
@@ -2018,7 +2023,13 @@ async function getGroupKey(groupId,epoch){
   raw=new Uint8Array(plain);
   localStorage.setItem('sft-group-key-'+S.currentUserId+'-'+groupId+'-'+data.key_epoch,e2eeBase64Url(raw));
  }
- return {key:await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']),epoch:epoch||undefined,raw};
+ const resolvedEpoch=epoch||Number((cacheKey.match(/-(\\d+)$/)||[])[1])||1;
+ return {key:await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']),epoch:resolvedEpoch,raw};
+}
+async function cacheGroupKeysForRecovery(uid){
+ const {data,error}=await getSupabase().from('group_chat_key_envelopes').select('group_id,key_epoch').eq('user_id',uid);
+ if(error)throw error;
+ for(const row of data||[])await getGroupKey(row.group_id,row.key_epoch);
 }
 async function encryptGroupBody(groupId,text){
  const material=await getGroupKey(groupId),iv=crypto.getRandomValues(new Uint8Array(12));
