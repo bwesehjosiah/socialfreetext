@@ -1823,7 +1823,7 @@ function openE2EERecovery(){
  $('e2ee-recovery-create-wrap').classList.add('hidden');$('e2ee-recovery-restore-wrap').classList.add('hidden');
  $('e2ee-recovery-pin-create').value='';$('e2ee-recovery-pin-confirm').value='';$('e2ee-recovery-pin-restore').value='';
  $('e2ee-recovery-modal').classList.remove('hidden');setE2EERecoveryScreen('intro');
- $('e2ee-recovery-start').textContent='Create PIN';$('e2ee-recovery-open-restore').classList.add('hidden');
+ $('e2ee-recovery-start').classList.remove('hidden');$('e2ee-recovery-start').textContent='Create PIN';$('e2ee-recovery-open-restore').classList.add('hidden');
  getSupabase().from('e2ee_key_backups').select('backup').eq('user_id',S.currentUserId).maybeSingle().then(({data,error})=>{
   if(error){toast('Could not check recovery backup: '+error.message,'error');return}
   const hasLocalKey=!!localStorage.getItem('sft-e2ee-'+S.currentUserId),b=data?.backup;
