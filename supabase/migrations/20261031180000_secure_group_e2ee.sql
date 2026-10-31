@@ -39,8 +39,30 @@ $$;
 
 revoke all on function private.is_group_member(uuid, uuid) from public, anon;
 revoke all on function private.is_group_admin(uuid, uuid) from public, anon;
+
+create or replace function private.can_distribute_group_key(p_group_id uuid, p_target_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.group_chat_members admin_member
+    join public.group_chat_members target_member
+      on target_member.group_id = admin_member.group_id
+    where admin_member.group_id = p_group_id
+      and admin_member.user_id = (select auth.uid())
+      and admin_member.role = 'admin'
+      and target_member.user_id = p_target_user_id
+  );
+$;
+
+revoke all on function private.can_distribute_group_key(uuid, uuid) from public, anon;
 grant execute on function private.is_group_member(uuid, uuid) to authenticated;
 grant execute on function private.is_group_admin(uuid, uuid) to authenticated;
+grant execute on function private.can_distribute_group_key(uuid, uuid) to authenticated;
 
 -- A member can see the membership roster for groups they belong to.
 drop policy if exists "Members read own group membership" on public.group_chat_members;
@@ -115,7 +137,7 @@ on public.group_chat_key_envelopes for insert to authenticated
 with check (
   created_by = (select auth.uid())
   and private.is_group_admin(group_id, (select auth.uid()))
-  and private.is_group_member(group_id, user_id)
+  and private.can_distribute_group_key(group_id, user_id)
 );
 
 drop policy if exists "Group admins rotate key envelopes" on public.group_chat_key_envelopes;
