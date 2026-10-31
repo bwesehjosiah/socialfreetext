@@ -2097,8 +2097,10 @@ async function sendMsg() {
  const inp=$('msg-in'), text=inp.value.trim(), c=chatById(activeChat);
  if(!text||!c)return;
  if(c.type==='group'){
-  try{const {error}=await getSupabase().from('group_chat_messages').insert({group_id:c.id,sender_id:S.currentUserId,body:text});if(error)throw error;inp.value='';inp.style.height='auto';await loadGroupMessages(c.id);}
-  catch(e){toast('Group message not sent: '+e.message,'error');}return;
+  // Fail closed until group key distribution, encryption, and recovery are implemented.
+  // Do not store plaintext group message bodies in Supabase.
+  toast('Group messaging is temporarily paused while end-to-end encryption is completed. Your message was not sent or stored.','warning');
+  return;
  }
  if(!liveConnected(c.userId))return toast('Connect with this user before sending private messages.','error');
  inp.value='';inp.style.height='auto';$('mic-btn').classList.remove('hidden');$('send-btn').classList.add('hidden');$('send-btn').classList.remove('flex');
