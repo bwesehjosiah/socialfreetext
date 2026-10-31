@@ -842,26 +842,58 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- ══════════ ENCRYPTED MESSAGE RECOVERY MODAL ══════════ -->
-<div id="e2ee-recovery-modal" class="fixed inset-0 z-[195] bg-black/85 backdrop-blur-sm hidden items-center justify-center p-4">
-  <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-5 fade-up">
-    <div class="flex justify-between items-center mb-3">
-      <h2 class="font-black text-base">Encrypted Message Recovery</h2>
-      <button onclick="closeModal('e2ee-recovery-modal')" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
+<!-- ══════════ FULL-SCREEN END-TO-END ENCRYPTED CHAT SETUP ══════════ -->
+<div id="e2ee-recovery-modal" class="fixed inset-0 z-[195] bg-[#242526] text-white hidden overflow-y-auto">
+  <div class="min-h-[100dvh] flex flex-col">
+    <header class="h-16 flex items-center px-5 shrink-0">
+      <button onclick="e2eeRecoveryBack()" aria-label="Go back" class="w-10 h-10 -ml-2 flex items-center justify-center text-3xl text-white/90">‹</button>
+      <span class="ml-2 text-sm font-bold tracking-wide">Chat privacy</span>
+    </header>
+    <div class="h-[34vh] min-h-[220px] max-h-[340px] bg-[#0b347d] flex items-center justify-center overflow-hidden">
+      <div class="w-56 h-72 rounded-t-[28px] bg-black relative mt-16 shadow-2xl border border-white/10">
+        <div class="absolute top-0 left-0 right-0 h-10 bg-[#222] rounded-t-[28px]"></div>
+        <div class="absolute top-16 left-8 right-8 h-2.5 rounded-full bg-[#353535]"></div>
+        <div class="absolute top-[88px] left-14 right-14 h-2.5 rounded-full bg-[#353535]"></div>
+        <div class="absolute top-[120px] left-5 right-5 h-20 rounded-full bg-[#262626] flex items-center justify-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_12px_#1677ff]"></span><span class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_12px_#1677ff]"></span><span class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_12px_#1677ff]"></span><span class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_12px_#1677ff]"></span><span class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_12px_#1677ff]"></span><span class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_12px_#1677ff]"></span>
+        </div>
+      </div>
     </div>
-    <p id="e2ee-recovery-help" class="text-xs text-gray-500 mb-3">Create a six-digit PIN to protect a backup of your private messaging key.</p>
-    <div id="e2ee-recovery-create-wrap" class="hidden">
-      <label class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">CREATE A 6-DIGIT RECOVERY PIN</label>
-      <input id="e2ee-recovery-pin-create" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="6-digit PIN" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm tracking-[0.5em] text-center mb-2">
-      <input id="e2ee-recovery-pin-confirm" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="Confirm 6-digit PIN" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm tracking-[0.5em] text-center mb-3">
-      <p class="text-[11px] text-amber-600 dark:text-amber-400 mb-3">Your six-digit PIN is the only recovery credential. Keep it private. This device applies a temporary lock after repeated incorrect attempts, but a stolen backup may still be guessed offline.</p>
-      <button onclick="createE2EERecoveryBackup()" class="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">Create six-digit PIN backup</button>
-    </div>
-    <div id="e2ee-recovery-restore-wrap" class="hidden">
-      <label for="e2ee-recovery-pin-restore" class="block text-[10px] font-black mb-1 text-gray-400 tracking-wider">ENTER YOUR 6-DIGIT RECOVERY PIN</label>
-      <input id="e2ee-recovery-pin-restore" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" placeholder="Enter the PIN used for this backup" class="w-full px-3 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm tracking-[0.5em] text-center">
-      <button onclick="restoreE2EERecoveryBackup()" class="w-full mt-3 py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">Restore encrypted messages</button>
-    </div>
+    <main class="flex-1 px-7 pt-8 pb-7 flex flex-col">
+      <section id="e2ee-recovery-intro" class="flex-1 flex flex-col">
+        <h1 class="text-[27px] leading-tight font-extrabold text-center mb-8">Create a PIN to access your chats on any device</h1>
+        <div class="space-y-7 text-[16px] leading-relaxed text-white/90">
+          <div class="flex gap-4"><span class="text-3xl shrink-0">🔒</span><p>Personal chats are secured with end-to-end encryption, so only the people in them can read, listen to, or share messages.</p></div>
+          <div class="flex gap-4"><span class="text-3xl shrink-0">✱</span><p>You’ll need a PIN to access these chats if you use another device or replace this one.</p></div>
+        </div>
+        <p id="e2ee-recovery-help" class="text-xs text-white/60 mt-5"></p>
+        <button id="e2ee-recovery-start" onclick="showE2EERecoverySetup()" class="mt-auto w-full py-4 rounded-2xl bg-[#0866ff] hover:bg-blue-600 text-white text-lg font-bold shadow-lg">Create PIN</button>
+        <button id="e2ee-recovery-open-restore" onclick="showE2EERecoveryRestore()" class="hidden mt-3 w-full py-3 rounded-2xl border border-white/20 text-white font-bold">Restore with existing PIN</button>
+      </section>
+      <section id="e2ee-recovery-create-wrap" class="hidden flex-1 flex-col">
+        <h1 class="text-2xl font-extrabold mb-3">Create your six-digit PIN</h1>
+        <p class="text-white/70 text-sm mb-7">Choose a PIN you can remember. You’ll need it to restore your encrypted chats on another device.</p>
+        <label class="text-xs font-bold tracking-wider text-white/60 mb-2">NEW SIX-DIGIT PIN</label>
+        <input id="e2ee-recovery-pin-create" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="••••••" class="w-full px-4 py-4 rounded-xl bg-[#383a3d] text-white text-xl tracking-[0.7em] text-center mb-4 outline-none focus:ring-2 focus:ring-blue-500">
+        <label class="text-xs font-bold tracking-wider text-white/60 mb-2">CONFIRM SIX-DIGIT PIN</label>
+        <input id="e2ee-recovery-pin-confirm" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="••••••" class="w-full px-4 py-4 rounded-xl bg-[#383a3d] text-white text-xl tracking-[0.7em] text-center mb-5 outline-none focus:ring-2 focus:ring-blue-500">
+        <p class="text-xs text-amber-300/90 mb-6">Keep this PIN private. If you forget it, your encrypted chats may not be recoverable. A stolen backup can still be attacked offline.</p>
+        <button onclick="createE2EERecoveryBackup()" class="mt-auto w-full py-4 rounded-2xl bg-[#0866ff] text-white text-lg font-bold">Create PIN</button>
+      </section>
+      <section id="e2ee-recovery-restore-wrap" class="hidden flex-1 flex-col">
+        <h1 class="text-2xl font-extrabold mb-3">Restore your encrypted chats</h1>
+        <p id="e2ee-recovery-restore-help" class="text-white/70 text-sm mb-7">Enter the PIN you used when creating your backup.</p>
+        <label for="e2ee-recovery-pin-restore" class="text-xs font-bold tracking-wider text-white/60 mb-2">RECOVERY PIN</label>
+        <input id="e2ee-recovery-pin-restore" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" placeholder="Enter recovery PIN" class="w-full px-4 py-4 rounded-xl bg-[#383a3d] text-white text-xl tracking-[0.7em] text-center outline-none focus:ring-2 focus:ring-blue-500">
+        <button onclick="restoreE2EERecoveryBackup()" class="mt-auto w-full py-4 rounded-2xl bg-[#0866ff] text-white text-lg font-bold">Restore chats</button>
+      </section>
+      <section id="e2ee-recovery-done" class="hidden flex-1 flex-col items-center justify-center text-center">
+        <div class="w-20 h-20 rounded-full bg-green-500/15 text-green-400 flex items-center justify-center text-4xl mb-6">✓</div>
+        <h1 class="text-2xl font-extrabold mb-3">Your chats are protected</h1>
+        <p class="text-white/70 text-sm mb-8">Your encrypted message key has been backed up. Keep your six-digit PIN somewhere safe.</p>
+        <button onclick="closeModal('e2ee-recovery-modal')" class="mt-auto w-full py-4 rounded-2xl bg-[#0866ff] text-white text-lg font-bold">Done</button>
+      </section>
+    </main>
   </div>
 </div>
 
@@ -1776,31 +1808,47 @@ function renderMsgs() {
       ${!mine && showAv ? `<img src="${esc(u.avatar)}" class="w-7 h-7 rounded-full object-cover shrink-0">` : (!mine ? '<div class="w-7"></div>' : '')}
       <div class="max-w-[78%] flex flex-col ${mine?'items-end':'items-start'}">
         ${showName ? `<p class="text-[10px] font-bold text-brand-500 mb-0.5 px-1">${esc(u.name)}</p>` : ''}
-        <div class="${mine?'bubble-me':'bubble-them'} px-3 py-2 shadow-sm">
-          ${content}
-          ${m.edited&&!m.deleted?'<span class="block text-[9px] opacity-60 mt-1">Edited</span>':''}
-          <div class="flex items-center gap-1 justify-end mt-0.5 ${m.type==='sticker'?'hidden':''}">
-            <span class="text-[9px] ${mine?'text-white/60':'text-gray-400'} font-mono">${time}</span>
-            ${mine?`<i class="fa-solid ${m.read?'fa-check-double':m.delivered?'fa-check-double':'fa-check'} text-[9px] ${m.read?'text-emerald-400':'text-white/60'}" title="${m.read?'Read':m.delivered?'Delivered':'Sent'}"></i>`:''}
-          </div>
-          ${Object.entries(m.reactions||{}).length?'<div class="flex flex-wrap gap-1 mt-1">'+Object.entries(m.reactions).map(([emoji,count])=>'<span class="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px]">'+emoji+' '+count+'</span>').join('')+'</div>':''}
-          ${m.id&&c?.type==='dm'?'<div class="flex items-center gap-1 mt-1 text-[11px]">'+['❤️','👍','😂','😮','😢','🔥'].map(e=>'<button type="button" onclick="toggleMessageReaction(\''+m.id+'\',\''+e+'\')" class="opacity-70 hover:opacity-100">'+e+'</button>').join('')+(mine&&!m.deleted&&m.type==='text'?'<button type="button" onclick="editMessage(\''+m.id+'\')" class="ml-1 underline opacity-70">Edit</button>':'')+(mine&&!m.deleted?'<button type="button" onclick="deleteMessage(\''+m.id+'\')" class="underline opacity-70">Delete</button>':'')+'</div>':''}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-  box.scrollTop = box.scrollHeight;
+        <div cfunction setE2EERecoveryScreen(screen){
+ ['intro','create-wrap','restore-wrap','done'].forEach(id=>{const el=$('e2ee-recovery-'+id);if(el){el.classList.add('hidden');el.classList.remove('flex')}});
+ const target=$('e2ee-recovery-'+screen);if(target){target.classList.remove('hidden');target.classList.add('flex')}
 }
-
-let livePresenceChannel=null, liveMessageChannel=null, liveCallChannel=null, livePeer=null, liveLocalStream=null, liveCallPeerId=null, liveCallKind='audio', liveIncoming=false, liveOnlineIds=new Set(), liveSeenIds=new Set(), pendingLiveIce=[];
-let dmTypingChannel=null, dmTypingTimer=null, dmTypingHideTimer=null, dmTypingPeer=null, dmTypingLastSent=0;
-const liveKeyCache=new Map();
-let e2eeRestoreRequired=false;
-function e2eeBase64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
-function e2eeFromBase64Url(value){const s=String(value).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(s+'='.repeat((4-s.length%4)%4));return Uint8Array.from(raw,ch=>ch.charCodeAt(0))}
-async function deriveE2EEBackupKey(pin,salt,iterations=1200000){
- const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);
- return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+function showE2EERecoverySetup(){setE2EERecoveryScreen('create-wrap')}
+function showE2EERecoveryRestore(){setE2EERecoveryScreen('restore-wrap')}
+function e2eeRecoveryBack(){
+ const intro=$('e2ee-recovery-intro');
+ if(!intro.classList.contains('hidden')){closeModal('e2ee-recovery-modal');return}
+ setE2EERecoveryScreen('intro');
+}
+function openE2EERecovery(){
+ $('e2ee-recovery-create-wrap').classList.add('hidden');$('e2ee-recovery-restore-wrap').classList.add('hidden');
+ $('e2ee-recovery-pin-create').value='';$('e2ee-recovery-pin-confirm').value='';$('e2ee-recovery-pin-restore').value='';
+ $('e2ee-recovery-modal').classList.remove('hidden');setE2EERecoveryScreen('intro');
+ $('e2ee-recovery-start').textContent='Create PIN';$('e2ee-recovery-open-restore').classList.add('hidden');
+ getSupabase().from('e2ee_key_backups').select('backup').eq('user_id',S.currentUserId).maybeSingle().then(({data,error})=>{
+  if(error){toast('Could not check recovery backup: '+error.message,'error');return}
+  const hasLocalKey=!!localStorage.getItem('sft-e2ee-'+S.currentUserId),b=data?.backup;
+  const supported=!!b&&(b.version===2&&b.kdf==='PBKDF2-SHA-256'&&b.iterations===600000||b.version===3&&b.kdf==='PBKDF2-SHA-256'&&b.iterations===1200000);
+  if(b&&supported){
+   $('e2ee-recovery-open-restore').classList.remove('hidden');
+   $('e2ee-recovery-pin-restore').placeholder=b.version===2?'Original 4-digit PIN':'6-digit PIN';
+   $('e2ee-recovery-pin-restore').setAttribute('pattern',b.version===2?'[0-9]{4}':'[0-9]{6}');
+   const pinLabel=document.querySelector('label[for="e2ee-recovery-pin-restore"]');
+   if(pinLabel)pinLabel.textContent=b.version===2?'ORIGINAL FOUR-DIGIT PIN':'SIX-DIGIT RECOVERY PIN';
+   $('e2ee-recovery-restore-help').textContent=b.version===2?'Enter the original four-digit PIN used for this backup.':'Enter your six-digit PIN to restore your encrypted chats.';
+  }
+  if(hasLocalKey){
+   $('e2ee-recovery-start').textContent=b?'Replace recovery PIN':'Create PIN';
+   $('e2ee-recovery-help').textContent=b?'A backup already exists. You can replace it with a new six-digit PIN.':'Create a PIN before changing phones or reinstalling the app.';
+  }else if(b&&supported){
+   $('e2ee-recovery-start').classList.add('hidden');
+   $('e2ee-recovery-help').textContent='Your encrypted chat backup is ready. Enter your PIN to restore it on this device.';
+  }else{
+   $('e2ee-recovery-start').classList.add('hidden');
+   $('e2ee-recovery-help').textContent='No backup is available. Use the original device that still has your encryption key to create one.';
+  }
+ }).catch(e=>toast(e.message,'error'));
+}
+,iterations},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
 function e2eeRecoveryLockKey(uid){return 'sft-e2ee-recovery-attempts-'+uid}
 function e2eeRecoveryLock(uid){
@@ -1861,7 +1909,7 @@ async function createE2EERecoveryBackup(){
   $('e2ee-recovery-create-wrap').classList.add('hidden');
   $('e2ee-recovery-restore-wrap').classList.remove('hidden');
   $('e2ee-recovery-pin-restore').value='';
-  $('e2ee-recovery-help').textContent='Your encrypted backup is ready. Remember your six-digit PIN; it is the only recovery credential.';
+  setE2EERecoveryScreen('done');
   toast('Six-digit PIN recovery backup created.','success');
  }catch(e){toast('Could not create recovery backup: '+e.message,'error')}
 }
@@ -1891,7 +1939,8 @@ async function restoreE2EERecoveryBackup(){
    const {error:profileError}=await getSupabase().from('profiles').update({e2ee_public_key:JSON.stringify(saved.publicKey)}).eq('id',uid);
    if(profileError)throw profileError;
    localStorage.removeItem(e2eeRecoveryLockKey(uid));
-   e2eeRestoreRequired=false;closeModal('e2ee-recovery-modal');
+   e2eeRestoreRequired=false;setE2EERecoveryScreen('done');
+   $('e2ee-recovery-done').querySelector('h1').textContent='Your chats are restored';$('e2ee-recovery-done').querySelector('p').textContent='Your encrypted message key is available on this device again.';
    toast('Your encrypted message key has been restored on this device.','success');
    if(activeChat)await loadPersistedDM(activeChat);
   }catch(decryptError){
