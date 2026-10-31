@@ -1999,7 +1999,8 @@ async function createGroupKeyEnvelopes(groupId,memberIds){
  const rows=[];
  for(const memberId of memberIds){
   const wrapKey=await deriveDMKey(memberId),iv=crypto.getRandomValues(new Uint8Array(12));
-  const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},wrapKey,raw);
+  const aad=new TextEncoder().encode('sft-group-key-v1:'+groupId+':'+memberId+':'+epoch);
+  const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},wrapKey,raw);
   rows.push({group_id:groupId,user_id:memberId,key_epoch:epoch,created_by:S.currentUserId,wrapped_key:{v:1,iv:Array.from(iv),data:Array.from(new Uint8Array(cipher))}});
  }
  const {error}=await getSupabase().from('group_chat_key_envelopes').insert(rows);
@@ -2022,7 +2023,8 @@ async function getGroupKey(groupId,epoch){
   const p=data.wrapped_key;
   if(!p||p.v!==1)throw new Error('Unsupported group key envelope.');
   const wrapKey=await deriveDMKey(data.created_by);
-  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)},wrapKey,new Uint8Array(p.data));
+  const aad=new TextEncoder().encode('sft-group-key-v1:'+groupId+':'+S.currentUserId+':'+data.key_epoch);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv),additionalData:aad},wrapKey,new Uint8Array(p.data));
   raw=new Uint8Array(plain);
   localStorage.setItem('sft-group-key-'+S.currentUserId+'-'+groupId+'-'+resolvedEpoch,e2eeBase64Url(raw));
  }else if(!resolvedEpoch){
@@ -2038,14 +2040,16 @@ async function cacheGroupKeysForRecovery(uid){
 }
 async function encryptGroupBody(groupId,text){
  const material=await getGroupKey(groupId),iv=crypto.getRandomValues(new Uint8Array(12));
- const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},material.key,new TextEncoder().encode(text));
+ const aad=new TextEncoder().encode('sft-group-msg-v1:'+groupId+':'+material.epoch);
+ const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},material.key,new TextEncoder().encode(text));
  return {body:'sftg1:'+JSON.stringify({v:1,iv:Array.from(iv),data:Array.from(new Uint8Array(cipher))}),key_epoch:material.epoch||1};
 }
 async function decryptGroupBody(groupId,body,epoch){
  if(!String(body).startsWith('sftg1:'))return 'Older message (sent before group encryption was enabled)';
  const p=JSON.parse(body.slice(5));if(p.v!==1)throw new Error('Unsupported encrypted group message.');
  const material=await getGroupKey(groupId,epoch);
- const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)},material.key,new Uint8Array(p.data));
+ const aad=new TextEncoder().encode('sft-group-msg-v1:'+groupId+':'+epoch);
+ const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv),additionalData:aad},material.key,new Uint8Array(p.data));
  return new TextDecoder().decode(plain);
 }
 
