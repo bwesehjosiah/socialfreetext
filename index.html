@@ -2165,6 +2165,9 @@ function attachMenu() {
 async function attachGroupMedia(kind){
  const chat=chatById(activeChat);
  if(!chat||chat.type!=='group')return attachURL(kind==='document'?'file':'image');
+ // Fail closed until group media is encrypted client-side and delivered via private storage.
+ toast('Group file sharing is temporarily paused until end-to-end encrypted media is ready. No file was uploaded or shared.','warning');
+ return;
  const picker=document.createElement('input');picker.type='file';picker.accept=kind==='image'?'image/*':kind==='video'?'video/mp4,video/webm':'.pdf,.doc,.docx,.txt';
  picker.onchange=async()=>{
   const file=picker.files?.[0];if(!file)return;
