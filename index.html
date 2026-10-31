@@ -1602,7 +1602,7 @@ function openConv(id) {
   activeChat = id;
   const c = chatById(id);
   if (!c) return;
-  setupDMTyping(c);
+  if(c.type==='dm')setupDMTyping(c);else subscribeGroupMessages(c.id);
 
   c.unread = 0; saveState(); renderChats();
   $('conv-empty').classList.add('hidden');
@@ -1642,7 +1642,7 @@ function openConv(id) {
       </div>
     </div>`;
   renderMsgs();
-  if(c.type==='dm'){loadPersistedDM(id).then(()=>markDMRead(id));}
+  if(c.type==='dm'){loadPersistedDM(id).then(()=>markDMRead(id));}else loadGroupMessages(id).catch(e=>toast('Could not load group messages: '+e.message,'error'));
 }
 function closeConv() {
   stopDMTyping();
@@ -1948,7 +1948,11 @@ async function playEncryptedVoice(url,senderId,messageId){
 async function sendMsg() {
  const inp=$('msg-in'), text=inp.value.trim(), c=chatById(activeChat);
  if(!text||!c)return;
- if(c.type!=='dm'||!liveConnected(c.userId))return toast('Connect with this user before sending private messages.','error');
+ if(c.type==='group'){
+  try{const {error}=await getSupabase().from('group_chat_messages').insert({group_id:c.id,sender_id:S.currentUserId,body:text});if(error)throw error;inp.value='';inp.style.height='auto';await loadGroupMessages(c.id);}
+  catch(e){toast('Group message not sent: '+e.message,'error');}return;
+ }
+ if(!liveConnected(c.userId))return toast('Connect with this user before sending private messages.','error');
  inp.value='';inp.style.height='auto';$('mic-btn').classList.remove('hidden');$('send-btn').classList.add('hidden');$('send-btn').classList.remove('flex');
  try{const body=await encryptDM(c.userId,text);const {data,error}=await getSupabase().from('messages').insert({sender_id:S.currentUserId,recipient_id:c.userId,body}).select('id,sender_id,recipient_id,body,created_at').single();if(error)throw error;sendSFTPush(c.userId,'message',{sender_id:S.currentUserId}).catch(()=>{});await receiveLiveDM(data)}
  catch(e){inp.value=text;toast('Message not sent: '+e.message,'error')}
@@ -2394,8 +2398,27 @@ function reactStory(emoji) {
 }
 
 /* ══════════ GROUPS ══════════ */
-function renderGroups() {
-  const groups = S.chats.filter(c => c.type === 'group');
+async function renderGroups() {
+  const el=$('groups-list');
+  const {data,error}=await getSupabase().from('group_chats').select('id,name,description,avatar_url,created_by,created_at,group_chat_members(user_id,role)').order('created_at',{ascending:false});
+  if(error){el.innerHTML='<p class="text-center text-xs text-red-400 py-8">Could not load groups.</p>';console.warn(error);return;}
+  const groups=data||[];
+  S.chats=S.chats.filter(c=>c.type!=='group').concat(groups.map(g=>({id:g.id,type:'group',name:g.name,desc:g.description,avatar:g.avatar_url||IMG_POOL[3],memberIds:(g.group_chat_members||[]).map(m=>m.user_id),admins:(g.group_chat_members||[]).filter(m=>m.role==='admin').map(m=>m.user_id),createdBy:g.created_by,lastMsg:'Group conversation',lastTime:new Date(g.created_at).getTime(),unread:0})));
+  if(!groups.length){el.innerHTML='<p class="text-center text-xs text-gray-400 py-8">No groups yet. Create one to start chatting.</p>';return;}
+  el.innerHTML=groups.map(g=>'<button onclick="openConv(\\''+g.id+'\\')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-left"><img src="'+esc(g.avatar_url||IMG_POOL[3])+'" class="w-12 h-12 rounded-full object-cover"><div class="flex-1 min-w-0"><p class="font-bold text-sm truncate">'+esc(g.name)+'</p><p class="text-[11px] text-gray-500">'+(g.group_chat_members||[]).length+' members</p></div></button>').join('');
+}
+async function loadGroupMessages(groupId){
+ const {data,error}=await getSupabase().from('group_chat_messages').select('id,group_id,sender_id,body,media_url,media_type,created_at').eq('group_id',groupId).order('created_at',{ascending:true}).limit(300);
+ if(error)throw error;
+ const ids=[...new Set((data||[]).map(m=>m.sender_id))];
+ if(ids.length){const {data:ps}=await getSupabase().from('profiles').select('id,username,display_name,avatar_url').in('id',ids);for(const p of ps||[])if(!userById(p.id))S.users.push({id:p.id,name:p.display_name||p.username||'Member',username:p.username||'',avatar:p.avatar_url||IMG_POOL[0],role:'User'});}
+ S.messages[groupId]=(data||[]).map(m=>({id:m.id,from:m.sender_id,type:m.media_type==='image'?'image':m.media_type==='video'?'video':m.media_type?'file':'text',text:m.media_url||m.body,name:'Shared document',at:new Date(m.created_at).getTime()}));
+ if(activeChat===groupId)renderMsgs();
+}
+function subscribeGroupMessages(groupId){
+ if(window.sftGroupChannel){try{getSupabase().removeChannel(window.sftGroupChannel)}catch{}}
+ window.sftGroupChannel=getSupabase().channel('group-'+groupId).on('postgres_changes',{event:'*',schema:'public',table:'group_chat_messages',filter:'group_id=eq.'+groupId},()=>loadGroupMessages(groupId).catch(console.warn)).subscribe();
+}
   const el = $('groups-list');
   if (!groups.length) return el.innerHTML = '<p class="text-center text-xs text-gray-400 py-8">No groups yet</p>';
   el.innerHTML = groups.map(g => `<button onclick="openConv('${g.id}')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-left">
@@ -2432,22 +2455,15 @@ function openGroupCreator() {
   document.body.insertAdjacentHTML('beforeend', html);
   setTimeout(() => { $('gc-sheet').classList.remove('hidden'); $('gc-sheet').classList.add('flex'); }, 10);
 }
-function createGroup() {
-  const name = $('g-name').value.trim();
-  if (!name) return toast('Group name required', 'error');
-  const desc = $('g-desc').value.trim();
-  const memberIds = [S.currentUserId, ...Array.from(document.querySelectorAll('.g-member:checked')).map(c => c.value)];
-  const g = {
-    id:'g'+uid(), type:'group', name, avatar: IMG_POOL[Math.floor(Math.random()*IMG_POOL.length)],
-    memberIds, admins: [S.currentUserId], createdBy: S.currentUserId,
-    lastMsg: 'Group created', lastTime: now(), unread: 0, desc
-  };
-  S.chats.push(g);
-  S.messages[g.id] = [{ id:'m'+uid(), from:'system', type:'text', text:`Group "${name}" created.`, at:now() }];
-  saveState();
-  $('gc-sheet').remove();
-  renderGroups();
-  toast('Group created 🎉', 'success');
+async function createGroup(){
+ const name=$('g-name').value.trim(),description=$('g-desc').value.trim();if(!name)return toast('Group name required','error');
+ const others=[...new Set(Array.from(document.querySelectorAll('.g-member:checked')).map(c=>c.value).filter(id=>id!==S.currentUserId))];
+ try{
+  const {data:g,error}=await getSupabase().from('group_chats').insert({name,description,created_by:S.currentUserId}).select('id').single();if(error)throw error;
+  const {error:ownerError}=await getSupabase().from('group_chat_members').insert({group_id:g.id,user_id:S.currentUserId,role:'admin'});if(ownerError)throw ownerError;
+  if(others.length){const {error:memberError}=await getSupabase().from('group_chat_members').insert(others.map(user_id=>({group_id:g.id,user_id,role:'member'})));if(memberError)throw memberError;}
+  $('gc-sheet').remove();await renderGroups();openConv(g.id);toast('Group created.','success');
+ }catch(e){toast('Could not create group: '+e.message,'error');}
 }
 
 /* ══════════ COMMUNITIES ══════════ */
