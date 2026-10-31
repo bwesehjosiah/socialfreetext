@@ -2029,6 +2029,38 @@ async function initializeExistingGroupE2EE(groupId){
  await createGroupKeyEnvelopes(groupId,memberIds,Number(group.key_epoch||1));
  toast('End-to-end encryption is initialized for this group.','success');
 }
+async function addGroupMemberAndRotate(groupId,newUserId){
+ const chat=chatById(groupId);
+ if(!chat||chat.type!=='group'||!chat.admins?.includes(S.currentUserId))throw new Error('Only a group admin can add members.');
+ if(!newUserId||newUserId===S.currentUserId)throw new Error('Choose another user.');
+ const client=getSupabase();
+ const {data:group,error:groupError}=await client.from('group_chats').select('key_epoch').eq('id',groupId).single();
+ if(groupError)throw groupError;
+ const {data:before,error:beforeError}=await client.from('group_chat_members').select('user_id').eq('group_id',groupId);
+ if(beforeError)throw beforeError;
+ const existing=(before||[]).map(m=>m.user_id);
+ if(existing.includes(newUserId))throw new Error('This person is already a group member.');
+ const nextIds=[...existing,newUserId],nextEpoch=Number(group.key_epoch||1)+1;
+ const {data:profiles,error:profileError}=await client.from('profiles').select('id,e2ee_public_key').in('id',nextIds);
+ if(profileError)throw profileError;
+ const ready=new Set((profiles||[]).filter(p=>p.e2ee_public_key).map(p=>p.id));
+ if(nextIds.some(id=>!ready.has(id)))throw new Error('Every group member must have enabled encrypted messaging before this invitation.');
+ const {error:lockError}=await client.from('group_chats').update({key_rotation_pending:true}).eq('id',groupId);
+ if(lockError)throw lockError;
+ try{
+  const {error:memberError}=await client.from('group_chat_members').insert({group_id:groupId,user_id:newUserId,role:'member'});
+  if(memberError)throw memberError;
+  const {error:staleError}=await client.from('group_chat_key_envelopes').delete().eq('group_id',groupId).eq('key_epoch',nextEpoch);
+  if(staleError)throw staleError;
+  await createGroupKeyEnvelopes(groupId,nextIds,nextEpoch);
+  const {error:activateError}=await client.from('group_chats').update({key_epoch:nextEpoch,key_rotation_pending:false}).eq('id',groupId);
+  if(activateError)throw activateError;
+  toast('Member added. Group keys were rotated so they cannot read earlier encrypted messages.','success');
+ }catch(e){
+  toast('Group key rotation is incomplete. Sending is paused for safety; an admin must retry. '+e.message,'error');
+  throw e;
+ }
+}
 async function removeGroupMemberAndRotate(groupId,memberId){
  if(!groupId||!memberId||memberId===S.currentUserId)throw new Error('Choose another member to remove.');
  const client=getSupabase();
@@ -2729,12 +2761,14 @@ async function openGroupMembersManager(groupId){
  for(const p of profiles||[])if(!userById(p.id))S.users.push({id:p.id,name:p.display_name||p.username||'Member',username:p.username||'',avatar:p.avatar_url||IMG_POOL[0],role:'User'});
  const rows=(members||[]).map(m=>{
   const u=userById(m.user_id),isSelf=m.user_id===S.currentUserId;
-  return '<div class="flex items-center gap-3 p-3 border-b border-gray-100 dark:border-gray-800"><img src="'+esc(u?.avatar||IMG_POOL[0])+'" class="w-9 h-9 rounded-full object-cover"><div class="flex-1 min-w-0"><p class="text-sm font-bold truncate">'+esc(u?.name||'Member')+'</p><p class="text-[10px] text-gray-500">'+(m.role==='admin'?'Admin':'Member')+'</p></div>'+(isSelf?'<span class="text-xs text-gray-400">You</span>':'<button onclick="removeGroupMemberAndRotate(\''+groupId+'\',\''+m.user_id+'\').then(()=>{this.closest(\'#group-members-sheet\')?.remove();renderGroups();openGroupMembersManager(\''+groupId+'\')}).catch(()=>{})" class="text-xs font-bold text-red-500 px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30">Remove</button>')+'</div>';
+  return '<div class="flex items-center gap-3 p-3 border-b border-gray-100 dark:border-gray-800"><img src="'+esc(u?.avatar||IMG_POOL[0])+'" class="w-9 h-9 rounded-full object-cover"><div class="flex-1 min-w-0"><p class="text-sm font-bold truncate">'+esc(u?.name||'Member')+'</p><p class="text-[10px] text-gray-500">'+(m.role==='admin'?'Admin':'Member')+'</p></div>'+(isSelf?'<span class="text-xs text-gray-400">You</span>':'<button onclick="removeGroupMemberAndRotate(\''+groupId+'\',\''+m.user_id+'\').then(()=>{this.closest(\'#group-members-sheet\')?.remove();renderGroups();openGroupMembersManager(\''+groupId+'\')}).catch(e=>toast('Could not remove member: '+e.message,'error'))" class="text-xs font-bold text-red-500 px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30">Remove</button>')+'</div>';
  }).join('');
+ const currentIds=new Set(ids);
+ const inviteRows=S.users.filter(u=>!currentIds.has(u.id)&&u.id!==S.currentUserId).map(u=>'<div class="flex items-center gap-3 p-3 border-b border-gray-100 dark:border-gray-800"><img src="'+esc(u.avatar||IMG_POOL[0])+'" class="w-9 h-9 rounded-full object-cover"><p class="flex-1 text-sm font-semibold truncate">'+esc(u.name||'Member')+'</p><button onclick="addGroupMemberAndRotate(\''+groupId+'\',\''+u.id+'\').then(()=>{renderGroups();openGroupMembersManager(\''+groupId+'\')}).catch(e=>toast(\'Could not add member: \'+e.message,\'error\'))" class="text-xs font-bold text-brand-600 px-3 py-2 rounded-lg hover:bg-blue-50">Add</button></div>').join('');
  document.getElementById('group-members-sheet')?.remove();
  const {data:ownEnvelope}=await getSupabase().from('group_chat_key_envelopes').select('user_id').eq('group_id',groupId).eq('user_id',S.currentUserId).limit(1).maybeSingle();
  const setupButton=ownEnvelope?'':'<button onclick="initializeExistingGroupE2EE(\''+groupId+'\').then(()=>openGroupMembersManager(\''+groupId+'\')).catch(e=>toast(\'Could not initialize group encryption: \'+e.message,\'error\'))" class="m-3 w-[calc(100%-1.5rem)] py-2.5 rounded-xl bg-brand-600 text-white text-sm font-bold">Set up group encryption</button>';
- document.body.insertAdjacentHTML('beforeend','<div id="group-members-sheet" class="fixed inset-0 z-[190] bg-black/70 flex items-end md:items-center justify-center p-3"><div class="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-900"><div class="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800"><h3 class="font-black">Group members</h3><button onclick="this.closest(\'#group-members-sheet\').remove()" class="text-gray-500 p-2">Close</button></div>'+setupButton+rows+'</div></div>');
+ document.body.insertAdjacentHTML('beforeend','<div id="group-members-sheet" class="fixed inset-0 z-[190] bg-black/70 flex items-end md:items-center justify-center p-3"><div class="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-900"><div class="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800"><h3 class="font-black">Group members</h3><button onclick="this.closest(\'#group-members-sheet\').remove()" class="text-gray-500 p-2">Close</button></div>'+setupButton+rows+(inviteRows?'<div class="px-4 pt-4 text-xs font-black text-gray-400">ADD PEOPLE</div>'+inviteRows:'')+'</div></div>');
 }
 function openGroupCreator() {
   const members = S.users.filter(u => u.id !== S.currentUserId);
