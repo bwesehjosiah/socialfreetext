@@ -1695,10 +1695,63 @@ async function markDMRead(chatId){
  if(error){console.warn('Could not update read receipts:',error.message);return}
  rows.forEach(m=>{if(ids.includes(m.id))m.read=true});renderMsgs();
 }
+
+function hiddenDMMessageIds(){try{return JSON.parse(localStorage.getItem('sft-hidden-'+S.currentUserId)||'[]')}catch{return[]}}
+async function editMessage(messageId){
+ const chat=chatById(activeChat),row=(S.messages[activeChat]||[]).find(m=>m.id===messageId);
+ if(!chat||chat.type!=='dm'||!row||row.from!==S.currentUserId||row.type!=='text'||row.deleted)return;
+ const next=prompt('Edit your message',row.text||'');if(next===null)return;
+ const value=next.trim();if(!value||value.length>5000)return toast('Message must contain 1–5000 characters.','error');
+ try{const body=await encryptDM(chat.userId,value);const {error}=await getSupabase().from('messages').update({body,is_deleted:false,deleted_at:null}).eq('id',messageId).eq('sender_id',S.currentUserId);if(error)throw error;row.text=value;row.edited=true;renderMsgs();toast('Message updated','success')}
+ catch(e){toast('Could not edit message: '+e.message,'error')}
+}
+async function deleteMessage(messageId){
+ const chat=chatById(activeChat),row=(S.messages[activeChat]||[]).find(m=>m.id===messageId);
+ if(!chat||chat.type!=='dm'||!row)return;
+ if(row.from!==S.currentUserId){const hidden=hiddenDMMessageIds();if(!hidden.includes(messageId)){hidden.push(messageId);localStorage.setItem('sft-hidden-'+S.currentUserId,JSON.stringify(hidden))}renderMsgs();return toast('Message hidden on this device','success')}
+ const everyone=confirm('Delete this message for everyone? Select Cancel to hide it only on this device.');
+ if(!everyone){const hidden=hiddenDMMessageIds();if(!hidden.includes(messageId)){hidden.push(messageId);localStorage.setItem('sft-hidden-'+S.currentUserId,JSON.stringify(hidden))}renderMsgs();return toast('Message hidden on this device','success')}
+ try{const body=await encryptDM(chat.userId,JSON.stringify({kind:'deleted'}));const {error}=await getSupabase().from('messages').update({body,is_deleted:true,deleted_at:new Date().toISOString()}).eq('id',messageId).eq('sender_id',S.currentUserId);if(error)throw error;row.text='This message was deleted';row.deleted=true;renderMsgs();toast('Message deleted for everyone','success')}
+ catch(e){toast('Could not delete message: '+e.message,'error')}
+}
+async function toggleMessageReaction(messageId,emoji){
+ const chat=chatById(activeChat);if(!chat||chat.type!=='dm')return;
+ try{const client=getSupabase(),{data:existing,error:readError}=await client.from('message_reactions').select('id,reaction').eq('message_id',messageId).eq('user_id',S.currentUserId).maybeSingle();if(readError)throw readError;
+ if(existing?.reaction===emoji){const {error}=await client.from('message_reactions').delete().eq('id',existing.id);if(error)throw error}
+ else{const {error}=await client.from('message_reactions').upsert({message_id:messageId,user_id:S.currentUserId,reaction:emoji},{onConflict:'message_id,user_id'});if(error)throw error}
+ await refreshActiveDMReactions()}catch(e){toast('Reaction could not be saved: '+e.message,'error')}
+}
+async function refreshActiveDMReactions(){
+ const chat=chatById(activeChat);if(!chat||chat.type!=='dm')return;
+ const rows=S.messages[activeChat]||[],ids=rows.filter(m=>m.id).map(m=>m.id);if(!ids.length)return;
+ const {data,error}=await getSupabase().from('message_reactions').select('message_id,user_id,reaction').in('message_id',ids);
+ if(error){console.warn('Could not load message reactions:',error.message);return}
+ rows.forEach(m=>{m.reactions={}});(data||[]).forEach(r=>{const m=rows.find(x=>x.id===r.message_id);if(m)m.reactions[r.reaction]=(m.reactions[r.reaction]||0)+1});renderMsgs();
+}
+async function markDMDelivered(messageId){
+ if(!messageId||!S.currentUserId)return;
+ const {error}=await getSupabase().from('messages').update({delivered_at:new Date().toISOString()}).eq('id',messageId).eq('recipient_id',S.currentUserId).is('delivered_at',null);
+ if(error)console.warn('Could not update delivery receipt:',error.message);
+}
+async function applyLiveDMUpdate(m){
+ if(!m?.id)return;let target=null,chatId=null;
+ for(const [id,rows] of Object.entries(S.messages)){const found=rows.find(x=>x.id===m.id);if(found){target=found;chatId=id;break}}
+ if(!target)return;target.delivered=!!m.delivered_at;target.read=!!m.read_at;
+ if(m.body&&(m.sender_id===S.currentUserId||m.recipient_id===S.currentUserId)){
+  const peer=m.sender_id===S.currentUserId?m.recipient_id:m.sender_id;
+  try{const plain=await decryptDM(peer,m.body),parsed=String(plain).startsWith('{')?JSON.parse(plain):null;
+   if(parsed?.kind==='deleted'||m.is_deleted){target.deleted=true;target.text='This message was deleted'}
+   else if(typeof plain==='string'){target.text=plain;target.edited=!!m.updated_at&&new Date(m.updated_at).getTime()>new Date(m.created_at).getTime()+1000}
+  }catch{}
+ }
+ if(activeChat===chatId)renderMsgs();
+}
+
 function renderMsgs() {
   const box = $('msgs');
   if (!box || !activeChat) return;
-  const msgs = S.messages[activeChat] || [];
+  const hiddenIds=hiddenDMMessageIds();
+  const msgs = (S.messages[activeChat] || []).filter(m=>!hiddenIds.includes(m.id));
   const c = chatById(activeChat);
   box.innerHTML = msgs.map((m, i) => {
     const mine = m.from === S.currentUserId;
@@ -1723,10 +1776,13 @@ function renderMsgs() {
         ${showName ? `<p class="text-[10px] font-bold text-brand-500 mb-0.5 px-1">${esc(u.name)}</p>` : ''}
         <div class="${mine?'bubble-me':'bubble-them'} px-3 py-2 shadow-sm">
           ${content}
+          ${m.edited&&!m.deleted?'<span class="block text-[9px] opacity-60 mt-1">Edited</span>':''}
           <div class="flex items-center gap-1 justify-end mt-0.5 ${m.type==='sticker'?'hidden':''}">
             <span class="text-[9px] ${mine?'text-white/60':'text-gray-400'} font-mono">${time}</span>
-            ${mine?`<i class="fa-solid ${m.read?'fa-check-double':'fa-check'} text-[9px] ${m.read?'text-emerald-400':'text-white/60'}"></i>`:''}
+            ${mine?`<i class="fa-solid ${m.read?'fa-check-double':m.delivered?'fa-check-double':'fa-check'} text-[9px] ${m.read?'text-emerald-400':'text-white/60'}" title="${m.read?'Read':m.delivered?'Delivered':'Sent'}"></i>`:''}
           </div>
+          ${Object.entries(m.reactions||{}).length?'<div class="flex flex-wrap gap-1 mt-1">'+Object.entries(m.reactions).map(([emoji,count])=>'<span class="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px]">'+emoji+' '+count+'</span>').join('')+'</div>':''}
+          ${m.id&&c?.type==='dm'?'<div class="flex items-center gap-1 mt-1 text-[11px]">'+['❤️','👍','😂','😮','😢','🔥'].map(e=>'<button type="button" onclick="toggleMessageReaction(\''+m.id+'\',\''+e+'\')" class="opacity-70 hover:opacity-100">'+e+'</button>').join('')+(mine&&!m.deleted&&m.type==='text'?'<button type="button" onclick="editMessage(\''+m.id+'\')" class="ml-1 underline opacity-70">Edit</button>':'')+(mine&&!m.deleted?'<button type="button" onclick="deleteMessage(\''+m.id+'\')" class="underline opacity-70">Delete</button>':'')+'</div>':''}
         </div>
       </div>
     </div>`;
