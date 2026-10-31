@@ -1988,6 +1988,51 @@ async function deriveDMKey(otherId){
 }
 async function encryptDM(otherId,text){const key=await deriveDMKey(otherId),iv=crypto.getRandomValues(new Uint8Array(12));const data=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(text));return 'e2ee:'+JSON.stringify({iv:Array.from(iv),data:Array.from(new Uint8Array(data))});}
 async function decryptDM(otherId,body){if(!String(body).startsWith('e2ee:'))return body;const key=await deriveDMKey(otherId),p=JSON.parse(body.slice(5));const data=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)},key,new Uint8Array(p.data));return new TextDecoder().decode(data);}
+async function createGroupKeyEnvelopes(groupId,memberIds){
+ await ensureE2EEKeys(S.currentUserId);
+ const raw=crypto.getRandomValues(new Uint8Array(32)),epoch=1;
+ const rows=[];
+ for(const memberId of memberIds){
+  const wrapKey=await deriveDMKey(memberId),iv=crypto.getRandomValues(new Uint8Array(12));
+  const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},wrapKey,raw);
+  rows.push({group_id:groupId,user_id:memberId,key_epoch:epoch,created_by:S.currentUserId,wrapped_key:{v:1,iv:Array.from(iv),data:Array.from(new Uint8Array(cipher))}});
+ }
+ const {error}=await getSupabase().from('group_chat_key_envelopes').insert(rows);
+ if(error)throw error;
+ localStorage.setItem('sft-group-key-'+S.currentUserId+'-'+groupId+'-'+epoch,e2eeBase64Url(raw));
+ return epoch;
+}
+async function getGroupKey(groupId,epoch){
+ const cacheKey='sft-group-key-'+S.currentUserId+'-'+groupId+'-'+epoch;
+ let raw=null;try{const saved=localStorage.getItem(cacheKey);if(saved)raw=e2eeFromBase64Url(saved)}catch{}
+ if(!raw){
+  await ensureE2EEKeys(S.currentUserId);
+  let q=getSupabase().from('group_chat_key_envelopes').select('wrapped_key,created_by,key_epoch').eq('group_id',groupId).eq('user_id',S.currentUserId);
+  if(epoch)q=q.eq('key_epoch',epoch);
+  const {data,error}=await q.order('key_epoch',{ascending:false}).limit(1).maybeSingle();
+  if(error)throw error;if(!data)throw new Error('This device has no encrypted key for this group. Ask a group admin to securely add your device.');
+  const p=data.wrapped_key;
+  if(!p||p.v!==1)throw new Error('Unsupported group key envelope.');
+  const wrapKey=await deriveDMKey(data.created_by);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)},wrapKey,new Uint8Array(p.data));
+  raw=new Uint8Array(plain);
+  localStorage.setItem('sft-group-key-'+S.currentUserId+'-'+groupId+'-'+data.key_epoch,e2eeBase64Url(raw));
+ }
+ return {key:await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']),epoch:epoch||undefined,raw};
+}
+async function encryptGroupBody(groupId,text){
+ const material=await getGroupKey(groupId),iv=crypto.getRandomValues(new Uint8Array(12));
+ const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},material.key,new TextEncoder().encode(text));
+ return {body:'sftg1:'+JSON.stringify({v:1,iv:Array.from(iv),data:Array.from(new Uint8Array(cipher))}),key_epoch:material.epoch||1};
+}
+async function decryptGroupBody(groupId,body,epoch){
+ if(!String(body).startsWith('sftg1:'))return 'Older message (sent before group encryption was enabled)';
+ const p=JSON.parse(body.slice(5));if(p.v!==1)throw new Error('Unsupported encrypted group message.');
+ const material=await getGroupKey(groupId,epoch);
+ const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)},material.key,new Uint8Array(p.data));
+ return new TextDecoder().decode(plain);
+}
+
 function liveConnected(id){return peopleRequests.some(r=>r.status==='accepted'&&((r.requester_id===S.currentUserId&&r.recipient_id===id)||(r.recipient_id===S.currentUserId&&r.requester_id===id)));}
 function subscribeLivePresence(){const client=getSupabase();if(livePresenceChannel)client.removeChannel(livePresenceChannel);livePresenceChannel=client.channel('sft-presence',{config:{presence:{key:S.currentUserId}}});livePresenceChannel.on('presence',{event:'sync'},()=>{liveOnlineIds=new Set(Object.keys(livePresenceChannel.presenceState()));updateLiveStatusUI()}).on('presence',{event:'join'},updateLiveStatusUI).on('presence',{event:'leave'},updateLiveStatusUI).subscribe(status=>{if(status==='SUBSCRIBED')livePresenceChannel.track({online_at:new Date().toISOString()})});}
 function updateLiveStatusUI(){renderPeople();if(activeChat){const c=chatById(activeChat),sub=document.querySelector('.live-status-text'),dot=document.querySelector('.live-status-dot');if(c?.type==='dm'){if(sub)sub.textContent=liveOnlineIds.has(c.userId)?'Online':'Offline';if(dot)dot.className='live-status-dot w-1.5 h-1.5 rounded-full '+(liveOnlineIds.has(c.userId)?'bg-emerald-500':'bg-gray-400')}}renderChats();}
@@ -2097,9 +2142,12 @@ async function sendMsg() {
  const inp=$('msg-in'), text=inp.value.trim(), c=chatById(activeChat);
  if(!text||!c)return;
  if(c.type==='group'){
-  // Fail closed until group key distribution, encryption, and recovery are implemented.
-  // Do not store plaintext group message bodies in Supabase.
-  toast('Group messaging is temporarily paused while end-to-end encryption is completed. Your message was not sent or stored.','warning');
+  try{
+   const encrypted=await encryptGroupBody(c.id,text);
+   const {error}=await getSupabase().from('group_chat_messages').insert({group_id:c.id,sender_id:S.currentUserId,body:encrypted.body,key_epoch:encrypted.key_epoch,encryption_version:1});
+   if(error)throw error;
+   inp.value='';inp.style.height='auto';await loadGroupMessages(c.id);
+  }catch(e){toast('Encrypted group message not sent: '+e.message,'error');}
   return;
  }
  if(!liveConnected(c.userId))return toast('Connect with this user before sending private messages.','error');
@@ -2577,11 +2625,17 @@ async function renderGroups() {
   el.innerHTML=groups.map(g=>'<button onclick="openConv(\''+g.id+'\')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-left"><img src="'+esc(g.avatar_url||IMG_POOL[3])+'" class="w-12 h-12 rounded-full object-cover"><div class="flex-1 min-w-0"><p class="font-bold text-sm truncate">'+esc(g.name)+'</p><p class="text-[11px] text-gray-500">'+(g.group_chat_members||[]).length+' members</p></div></button>').join('');
 }
 async function loadGroupMessages(groupId){
- const {data,error}=await getSupabase().from('group_chat_messages').select('id,group_id,sender_id,body,media_url,media_type,created_at').eq('group_id',groupId).order('created_at',{ascending:true}).limit(300);
+ const {data,error}=await getSupabase().from('group_chat_messages').select('id,group_id,sender_id,body,media_url,media_type,created_at,key_epoch,encryption_version').eq('group_id',groupId).order('created_at',{ascending:true}).limit(300);
  if(error)throw error;
  const ids=[...new Set((data||[]).map(m=>m.sender_id))];
  if(ids.length){const {data:ps}=await getSupabase().from('profiles').select('id,username,display_name,avatar_url').in('id',ids);for(const p of ps||[])if(!userById(p.id))S.users.push({id:p.id,name:p.display_name||p.username||'Member',username:p.username||'',avatar:p.avatar_url||IMG_POOL[0],role:'User'});}
- S.messages[groupId]=(data||[]).map(m=>({id:m.id,from:m.sender_id,type:m.media_type==='image'?'image':m.media_type==='video'?'video':m.media_type?'file':'text',text:m.media_url||m.body,name:'Shared document',at:new Date(m.created_at).getTime()}));
+ const rows=[];
+ for(const m of data||[]){
+  let body='Encrypted group message';
+  try{body=m.encryption_version===1?await decryptGroupBody(groupId,m.body,m.key_epoch):'Older message (not end-to-end encrypted)'}catch(e){body='🔒 Could not decrypt this group message on this device';}
+  rows.push({id:m.id,from:m.sender_id,type:'text',text:body,name:'',at:new Date(m.created_at).getTime()});
+ }
+ S.messages[groupId]=rows;
  if(activeChat===groupId)renderMsgs();
 }
 function subscribeGroupMessages(groupId){
@@ -2618,11 +2672,19 @@ async function createGroup(){
  const name=$('g-name').value.trim(),description=$('g-desc').value.trim();if(!name)return toast('Group name required','error');
  const others=[...new Set(Array.from(document.querySelectorAll('.g-member:checked')).map(c=>c.value).filter(id=>id!==S.currentUserId))];
  try{
+  await ensureE2EEKeys(S.currentUserId);
+  const memberIds=[S.currentUserId,...others];
+  const {data:profiles,error:profileError}=await getSupabase().from('profiles').select('id,e2ee_public_key').in('id',memberIds);
+  if(profileError)throw profileError;
+  const ready=new Set((profiles||[]).filter(p=>p.e2ee_public_key).map(p=>p.id));
+  const missing=memberIds.filter(id=>!ready.has(id));
+  if(missing.length)throw new Error('Every selected member must sign in once and enable encrypted messaging before joining an encrypted group.');
   const {data:g,error}=await getSupabase().from('group_chats').insert({name,description,created_by:S.currentUserId}).select('id').single();if(error)throw error;
   const {error:ownerError}=await getSupabase().from('group_chat_members').insert({group_id:g.id,user_id:S.currentUserId,role:'admin'});if(ownerError)throw ownerError;
   if(others.length){const {error:memberError}=await getSupabase().from('group_chat_members').insert(others.map(user_id=>({group_id:g.id,user_id,role:'member'})));if(memberError)throw memberError;}
-  $('gc-sheet').remove();await renderGroups();openConv(g.id);toast('Group created.','success');
- }catch(e){toast('Could not create group: '+e.message,'error');}
+  await createGroupKeyEnvelopes(g.id,memberIds);
+  $('gc-sheet').remove();await renderGroups();openConv(g.id);toast('Encrypted group created.','success');
+ }catch(e){toast('Could not create encrypted group: '+e.message,'error');}
 }
 
 /* ══════════ COMMUNITIES ══════════ */
