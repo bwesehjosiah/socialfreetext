@@ -10,6 +10,8 @@ create table if not exists public.profiles (
   display_name text not null default '',
   avatar_url text,
   bio text not null default '',
+  -- Public E2EE key only; private keys must never be stored here.
+  e2ee_public_key text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint profiles_username_format check (username is null or username ~ '^[a-zA-Z0-9_]{3,24}$'),
@@ -98,7 +100,7 @@ alter table public.statuses enable row level security;
 revoke all on table public.profiles, public.messages, public.statuses from anon, authenticated;
 grant select on table public.profiles to authenticated;
 grant insert (id, username, display_name, avatar_url, bio) on table public.profiles to authenticated;
-grant update (username, display_name, avatar_url, bio) on table public.profiles to authenticated;
+grant update (username, display_name, avatar_url, bio, e2ee_public_key) on table public.profiles to authenticated;
 grant select on table public.messages to authenticated;
 grant insert (sender_id, recipient_id, body) on table public.messages to authenticated;
 grant select, delete on table public.statuses to authenticated;
