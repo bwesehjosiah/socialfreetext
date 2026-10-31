@@ -495,14 +495,14 @@ tailwind.config = {
                 <p id="pr-connections" class="text-lg font-black">0</p>
                 <p class="text-[10px] text-gray-500">Connections</p>
               </div>
-              <div class="text-center">
+              <button type="button" onclick="openFollowList('followers')" class="text-center rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 py-1">
                 <p id="pr-followers" class="text-lg font-black">0</p>
                 <p class="text-[10px] text-gray-500">Followers</p>
-              </div>
-              <div class="text-center">
+              </button>
+              <button type="button" onclick="openFollowList('following')" class="text-center rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 py-1">
                 <p id="pr-following" class="text-lg font-black">0</p>
                 <p class="text-[10px] text-gray-500">Following</p>
-              </div>
+              </button>
             </div>
             <div class="mt-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
               <div>
@@ -514,9 +514,10 @@ tailwind.config = {
                 <p id="pr-status" class="font-bold text-sm text-emerald-500">Active</p>
               </div>
             </div>
-            <button onclick="go('settings')" class="mt-4 w-full py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition">
-              <i class="fa-solid fa-gear mr-1.5"></i>Account Settings
-            </button>
+            <div class="grid grid-cols-2 gap-2 mt-4">
+              <button onclick="openProfilePrivacy()" class="py-2.5 rounded-xl bg-brand-50 dark:bg-brand-950/30 text-brand-700 dark:text-brand-300 text-xs font-bold"><i class="fa-solid fa-shield-halved mr-1"></i> Profile privacy</button>
+              <button onclick="go('settings')" class="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition"><i class="fa-solid fa-gear mr-1"></i> Account settings</button>
+            </div>
           </div>
         </div>
       </section>
@@ -2595,7 +2596,11 @@ function clearAi() { S.aiHistory = [AI_GREETING]; saveState(); renderAiStream();
 function renderProfile() {
   const u = me();
   $('pr-av').src = u.avatar;
-  const cover = $('pr-cover'); if (cover) { cover.style.backgroundImage = u.cover ? `url('${String(u.cover).replace(/'/g, '%27')}')` : ''; cover.classList.toggle('bg-gradient-to-r', !u.cover); }
+  const cover = $('pr-cover');
+  if (cover) {
+    cover.style.backgroundImage = u.cover ? `url('${String(u.cover).replace(/'/g, '%27')}')` : '';
+    cover.classList.toggle('bg-gradient-to-r', !u.cover);
+  }
   $('pr-name').textContent = u.name;
   $('pr-badge').classList.toggle('hidden', !u.verified);
   $('pr-handle').textContent = '@' + u.username;
@@ -2607,29 +2612,84 @@ function renderProfile() {
   loadFollowCounts().catch(e=>console.warn('Follow counts:',e.message));
   loadConnectionCount().catch(e=>console.warn('Connection count:',e.message));
 }
+async function openProfilePrivacy() {
+  const client=getSupabase(), id=S.currentUserId;
+  try {
+    const {data,error}=await client.from('profiles').select('profile_visibility,followers_visibility,following_visibility,show_online_status').eq('id',id).single();
+    if(error) throw error;
+    const p=data||{};
+    const select=(id,label,value,opts)=>`<label class="block text-xs font-bold">${label}<select id="${id}" class="mt-1 w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm">${opts.map(x=>`<option value="${x[0]}" ${(value||x[0])===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select></label>`;
+    const html=`<div id="privacy-sheet" class="fixed inset-0 z-[190] bg-black/80 backdrop-blur-sm hidden items-end justify-center md:items-center p-4">
+      <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-5 space-y-4 max-h-[88vh] overflow-y-auto">
+        <div class="flex items-center justify-between"><h2 class="font-black text-base">Profile privacy</h2><button onclick="$('privacy-sheet').remove()" class="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-800"><i class="fa-solid fa-xmark"></i></button></div>
+        <p class="text-xs text-gray-500">Choose who can discover your profile and see your social lists. Changes are enforced by database access rules.</p>
+        ${select('privacy-profile','Who can view your profile',p.profile_visibility,[['public','Everyone signed in'],['connections','Accepted connections'],['private','Only me']])}
+        ${select('privacy-followers','Who can see your followers',p.followers_visibility,[['public','Everyone signed in'],['connections','Accepted connections'],['private','Only me']])}
+        ${select('privacy-following','Who can see who you follow',p.following_visibility,[['public','Everyone signed in'],['connections','Accepted connections'],['private','Only me']])}
+        <label class="flex items-center justify-between gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/70"><span><b class="block text-xs">Show online status</b><small class="text-[10px] text-gray-500">Allow others to see when you are online</small></span><input id="privacy-online" type="checkbox" class="w-5 h-5 accent-brand-600" ${p.show_online_status===false?'':'checked'}></label>
+        <button onclick="saveProfilePrivacy()" class="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">Save privacy settings</button>
+      </div></div>`;
+    document.body.insertAdjacentHTML('beforeend',html);
+    const el=$('privacy-sheet');el.classList.remove('hidden');el.classList.add('flex');
+  } catch(e) { toast(authErrorMessage(e),'error'); }
+}
+async function saveProfilePrivacy() {
+  try {
+    const {error}=await getSupabase().from('profiles').update({
+      profile_visibility:$('privacy-profile').value,
+      followers_visibility:$('privacy-followers').value,
+      following_visibility:$('privacy-following').value,
+      show_online_status:$('privacy-online').checked
+    }).eq('id',S.currentUserId);
+    if(error) throw error;
+    $('privacy-sheet')?.remove();
+    toast('Privacy settings saved','success');
+  } catch(e) { toast(authErrorMessage(e),'error'); }
+}
+async function openFollowList(kind) {
+  const title=kind==='followers'?'Followers':'Following';
+  const field=kind==='followers'?'follower_id':'following_id';
+  const target=kind==='followers'?'following_id':'follower_id';
+  try {
+    const {data,error}=await getSupabase().from('follows').select('follower_id,following_id').eq(target,S.currentUserId).order('created_at',{ascending:false}).limit(100);
+    if(error) throw error;
+    const ids=(data||[]).map(x=>x[field]).filter(Boolean);
+    let users=[];
+    if(ids.length) {
+      const result=await getSupabase().from('profiles').select('id,username,display_name,avatar_url').in('id',ids);
+      if(result.error) throw result.error;
+      users=result.data||[];
+    }
+    const byId=new Map(users.map(x=>[x.id,x]));
+    const rows=ids.map(id=>byId.get(id)).filter(Boolean);
+    const html=`<div id="follow-list-sheet" class="fixed inset-0 z-[190] bg-black/80 backdrop-blur-sm hidden items-end justify-center md:items-center p-4"><div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-4 max-h-[80vh] flex flex-col"><div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800"><h2 class="font-black">${title}</h2><button onclick="$('follow-list-sheet').remove()" class="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-800"><i class="fa-solid fa-xmark"></i></button></div><div class="overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">${rows.length?rows.map(u=>`<div class="flex items-center gap-3 py-3"><img src="${esc(u.avatar_url||'')}" class="w-10 h-10 rounded-full object-cover"><div class="min-w-0"><p class="font-bold text-sm truncate">${esc(u.display_name||u.username||'User')}</p><p class="text-xs text-gray-500">@${esc(u.username||'')}</p></div></div>`).join(''):'<p class="text-center text-xs text-gray-500 py-8">No visible accounts in this list.</p>'}</div></div></div>`;
+    document.body.insertAdjacentHTML('beforeend',html);
+    const el=$('follow-list-sheet');el.classList.remove('hidden');el.classList.add('flex');
+  } catch(e) { toast(authErrorMessage(e),'error'); }
+}
 function editProfile() {
   const u = me();
   const html = `<div class="fixed inset-0 z-[180] bg-black/80 backdrop-blur-sm hidden items-end justify-center md:items-center p-0 md:p-4" id="ep-sheet">
     <div class="w-full max-w-md bg-white dark:bg-gray-900 md:rounded-3xl rounded-t-3xl shadow-2xl slide-up max-h-[90vh] overflow-y-auto sb">
-      <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
-        <h2 class="font-black text-base">Edit Profile</h2>
-        <button onclick="this.closest('#ep-sheet').remove()" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button>
-      </div>
+      <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10"><h2 class="font-black text-base">Edit Profile</h2><button onclick="this.closest('#ep-sheet').remove()" class="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-xmark"></i></button></div>
       <form onsubmit="event.preventDefault();saveProfileEdit()" class="p-4 space-y-3">
         <div class="flex justify-center"><img id="ep-preview" src="${esc(u.avatar)}" class="w-24 h-24 rounded-2xl object-cover border-4 border-brand-500/30"></div>
-        <label class="block text-xs font-bold">Profile photo<input id="ep-avatar-file" type="file" accept="image/*" class="block w-full mt-1 text-xs"></label><label class="block text-xs font-bold">Cover photo<input id="ep-cover-file" type="file" accept="image/*" class="block w-full mt-1 text-xs"></label><input id="ep-av-url" value="${esc(u.avatar)}" placeholder="Or paste profile photo URL" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs focus:outline-none focus:ring-1 focus:ring-brand-500">
+        <label class="block text-xs font-bold">Profile photo<input id="ep-avatar-file" type="file" accept="image/*" class="block w-full mt-1 text-xs"></label>
+        <label class="block text-xs font-bold">Cover photo<input id="ep-cover-file" type="file" accept="image/*" class="block w-full mt-1 text-xs"></label>
+        <input id="ep-av-url" value="${esc(u.avatar)}" placeholder="Or paste profile photo URL" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs">
         <button type="button" onclick="$('ep-av-url').value=IMG_POOL[Math.floor(Math.random()*IMG_POOL.length)];$('ep-preview').src=$('ep-av-url').value" class="w-full text-[11px] font-bold text-brand-500 py-1">🎲 Random avatar</button>
-        <input id="ep-name" value="${esc(u.name)}" required placeholder="Display name" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
-        <input id="ep-user" value="${esc(u.username)}" required placeholder="Username" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
-        <textarea id="ep-bio" rows="3" placeholder="Bio" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-brand-500">${esc(u.bio||'')}</textarea>
-        <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm">Save</button>
+        <input id="ep-name" value="${esc(u.name)}" required maxlength="80" placeholder="Display name" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm">
+        <input id="ep-user" value="${esc(u.username)}" required minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" placeholder="Username" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm">
+        <textarea id="ep-bio" rows="3" maxlength="300" placeholder="Tell people about yourself (300 characters max)" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm resize-none">${esc(u.bio||'')}</textarea>
+        <p class="text-[10px] text-gray-500">Your profile and cover photos are limited to 5 MB each.</p>
+        <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm">Save profile</button>
       </form>
-    </div>
-  </div>`;
+    </div></div>`;
   document.body.insertAdjacentHTML('beforeend', html);
   setTimeout(() => { $('ep-sheet').classList.remove('hidden'); $('ep-sheet').classList.add('flex'); }, 10);
-  setTimeout(() => $('ep-av-url').addEventListener('input', e => $('ep-preview').src = e.target.value), 30);
-  setTimeout(() => $('ep-avatar-file')?.addEventListener('change', e => {const file=e.target.files?.[0];if(file)$('ep-preview').src=URL.createObjectURL(file)}), 30);
+  $('ep-av-url').addEventListener('input', e => $('ep-preview').src = e.target.value);
+  $('ep-avatar-file')?.addEventListener('change', e => {const file=e.target.files?.[0];if(file)$('ep-preview').src=URL.createObjectURL(file)});
+  $('ep-cover-file')?.addEventListener('change', e => {const file=e.target.files?.[0];if(file){const p=$('ep-cover-preview');if(p)p.src=URL.createObjectURL(file)}});
 }
 async function uploadProfileImage(file, kind) {
   if (!file) return null;
