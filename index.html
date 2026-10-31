@@ -2008,22 +2008,27 @@ async function createGroupKeyEnvelopes(groupId,memberIds){
  return epoch;
 }
 async function getGroupKey(groupId,epoch){
- const cacheKey='sft-group-key-'+S.currentUserId+'-'+groupId+'-'+epoch;
- let raw=null;try{const saved=localStorage.getItem(cacheKey);if(saved)raw=e2eeFromBase64Url(saved)}catch{}
+ let resolvedEpoch=epoch||null;
+ let raw=null;
+ const cacheKey=resolvedEpoch?'sft-group-key-'+S.currentUserId+'-'+groupId+'-'+resolvedEpoch:null;
+ try{const saved=cacheKey&&localStorage.getItem(cacheKey);if(saved)raw=e2eeFromBase64Url(saved)}catch{}
  if(!raw){
   await ensureE2EEKeys(S.currentUserId);
   let q=getSupabase().from('group_chat_key_envelopes').select('wrapped_key,created_by,key_epoch').eq('group_id',groupId).eq('user_id',S.currentUserId);
-  if(epoch)q=q.eq('key_epoch',epoch);
+  if(resolvedEpoch)q=q.eq('key_epoch',resolvedEpoch);
   const {data,error}=await q.order('key_epoch',{ascending:false}).limit(1).maybeSingle();
   if(error)throw error;if(!data)throw new Error('This device has no encrypted key for this group. Ask a group admin to securely add your device.');
+  resolvedEpoch=data.key_epoch;
   const p=data.wrapped_key;
   if(!p||p.v!==1)throw new Error('Unsupported group key envelope.');
   const wrapKey=await deriveDMKey(data.created_by);
   const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)},wrapKey,new Uint8Array(p.data));
   raw=new Uint8Array(plain);
-  localStorage.setItem('sft-group-key-'+S.currentUserId+'-'+groupId+'-'+data.key_epoch,e2eeBase64Url(raw));
+  localStorage.setItem('sft-group-key-'+S.currentUserId+'-'+groupId+'-'+resolvedEpoch,e2eeBase64Url(raw));
+ }else if(!resolvedEpoch){
+  const {data,error}=await getSupabase().from('group_chat_key_envelopes').select('key_epoch').eq('group_id',groupId).eq('user_id',S.currentUserId).order('key_epoch',{ascending:false}).limit(1).maybeSingle();
+  if(error)throw error;resolvedEpoch=data?.key_epoch||1;
  }
- const resolvedEpoch=epoch||Number((cacheKey.match(/-(\\d+)$/)||[])[1])||1;
  return {key:await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']),epoch:resolvedEpoch,raw};
 }
 async function cacheGroupKeysForRecovery(uid){
