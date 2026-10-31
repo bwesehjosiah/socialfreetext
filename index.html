@@ -1733,15 +1733,17 @@ async function markDMDelivered(messageId){
  const {error}=await getSupabase().from('messages').update({delivered_at:new Date().toISOString()}).eq('id',messageId).eq('recipient_id',S.currentUserId).is('delivered_at',null);
  if(error)console.warn('Could not update delivery receipt:',error.message);
 }
-async function applyLiveDMUpdate(m){
+async function applyLiveDMUpdate(m,old){
  if(!m?.id)return;let target=null,chatId=null;
  for(const [id,rows] of Object.entries(S.messages)){const found=rows.find(x=>x.id===m.id);if(found){target=found;chatId=id;break}}
  if(!target)return;target.delivered=!!m.delivered_at;target.read=!!m.read_at;
- if(m.body&&(m.sender_id===S.currentUserId||m.recipient_id===S.currentUserId)){
+ if(m.body&&old?.body!==m.body&&(m.sender_id===S.currentUserId||m.recipient_id===S.currentUserId)){
   const peer=m.sender_id===S.currentUserId?m.recipient_id:m.sender_id;
-  try{const plain=await decryptDM(peer,m.body),parsed=String(plain).startsWith('{')?JSON.parse(plain):null;
+  try{
+   const plain=await decryptDM(peer,m.body),parsed=String(plain).startsWith('{')?JSON.parse(plain):null;
    if(parsed?.kind==='deleted'||m.is_deleted){target.deleted=true;target.text='This message was deleted'}
-   else if(typeof plain==='string'){target.text=plain;target.edited=!!m.updated_at&&new Date(m.updated_at).getTime()>new Date(m.created_at).getTime()+1000}
+   else if(parsed?.kind==='voice'){target.type='voice';target.text=parsed.url;target.dur=parsed.duration||target.dur}
+   else if(typeof plain==='string'){target.type='text';target.text=plain;target.deleted=false;target.edited=!!m.updated_at&&new Date(m.updated_at).getTime()>new Date(m.created_at).getTime()+1000}
   }catch{}
  }
  if(activeChat===chatId)renderMsgs();
@@ -1975,7 +1977,7 @@ function subscribeLiveMessages(){
  liveMessageChannel=client.channel('sft-messages-'+S.currentUserId)
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:'recipient_id=eq.'+S.currentUserId},e=>receiveLiveDM(e.new))
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:'sender_id=eq.'+S.currentUserId},e=>receiveLiveDM(e.new))
-  .on('postgres_changes',{event:'UPDATE',schema:'public',table:'messages',filter:'sender_id=eq.'+S.currentUserId},e=>applyLiveDMUpdate(e.new))
+  .on('postgres_changes',{event:'UPDATE',schema:'public',table:'messages',filter:'sender_id=eq.'+S.currentUserId},e=>applyLiveDMUpdate(e.new,e.old))
   .on('postgres_changes',{event:'UPDATE',schema:'public',table:'messages',filter:'recipient_id=eq.'+S.currentUserId},e=>applyLiveDMUpdate(e.new))
   .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},()=>refreshActiveDMReactions())
   .subscribe();
