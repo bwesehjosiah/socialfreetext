@@ -1659,7 +1659,7 @@ function openConv(id) {
         <p class="font-bold text-sm truncate">${esc(t)}</p>
         <p class="text-[11px] flex items-center gap-1.5"><span class="live-status-dot w-1.5 h-1.5 rounded-full"></span><span class="live-status-text">${esc(sub)}</span></p>
       </div>
-      ${c.type==='group'&&c.admins?.includes(S.currentUserId)?'<button onclick="openGroupMembersManager(\\''+c.id+'\\')" title="Manage group members" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-users-gear"></i></button>':''}
+      ${c.type==='group'&&c.admins?.includes(S.currentUserId)?'<button onclick="openGroupMembersManager(\''+c.id+'\\')" title="Manage group members" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-users-gear"></i></button>':''}
       <button onclick="startLiveCall('audio')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-phone"></i></button>
       <button onclick="startLiveCall('video')" class="w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-video"></i></button>
     </div>
