@@ -2676,6 +2676,7 @@ function editProfile() {
         <div class="flex justify-center"><img id="ep-preview" src="${esc(u.avatar)}" class="w-24 h-24 rounded-2xl object-cover border-4 border-brand-500/30"></div>
         <label class="block text-xs font-bold">Profile photo<input id="ep-avatar-file" type="file" accept="image/*" class="block w-full mt-1 text-xs"></label>
         <label class="block text-xs font-bold">Cover photo<input id="ep-cover-file" type="file" accept="image/*" class="block w-full mt-1 text-xs"></label>
+        <img id="ep-cover-preview" src="${esc(u.cover||'')}" class="w-full h-24 rounded-xl object-cover ${u.cover?'':'hidden'}" alt="Cover photo preview">
         <input id="ep-av-url" value="${esc(u.avatar)}" placeholder="Or paste profile photo URL" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs">
         <button type="button" onclick="$('ep-av-url').value=IMG_POOL[Math.floor(Math.random()*IMG_POOL.length)];$('ep-preview').src=$('ep-av-url').value" class="w-full text-[11px] font-bold text-brand-500 py-1">🎲 Random avatar</button>
         <input id="ep-name" value="${esc(u.name)}" required maxlength="80" placeholder="Display name" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm">
@@ -2689,7 +2690,7 @@ function editProfile() {
   setTimeout(() => { $('ep-sheet').classList.remove('hidden'); $('ep-sheet').classList.add('flex'); }, 10);
   $('ep-av-url').addEventListener('input', e => $('ep-preview').src = e.target.value);
   $('ep-avatar-file')?.addEventListener('change', e => {const file=e.target.files?.[0];if(file)$('ep-preview').src=URL.createObjectURL(file)});
-  $('ep-cover-file')?.addEventListener('change', e => {const file=e.target.files?.[0];if(file){const p=$('ep-cover-preview');if(p)p.src=URL.createObjectURL(file)}});
+  $('ep-cover-file')?.addEventListener('change', e => {const file=e.target.files?.[0],p=$('ep-cover-preview');if(file&&p){p.src=URL.createObjectURL(file);p.classList.remove('hidden')}});
 }
 async function uploadProfileImage(file, kind) {
   if (!file) return null;
