@@ -1993,9 +1993,9 @@ async function deriveDMKey(otherId){
 }
 async function encryptDM(otherId,text){const key=await deriveDMKey(otherId),iv=crypto.getRandomValues(new Uint8Array(12));const data=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(text));return 'e2ee:'+JSON.stringify({iv:Array.from(iv),data:Array.from(new Uint8Array(data))});}
 async function decryptDM(otherId,body){if(!String(body).startsWith('e2ee:'))return body;const key=await deriveDMKey(otherId),p=JSON.parse(body.slice(5));const data=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)},key,new Uint8Array(p.data));return new TextDecoder().decode(data);}
-async function createGroupKeyEnvelopes(groupId,memberIds){
+async function createGroupKeyEnvelopes(groupId,memberIds,epoch=1,providedRaw=null){
  await ensureE2EEKeys(S.currentUserId);
- const raw=crypto.getRandomValues(new Uint8Array(32)),epoch=1;
+ const raw=providedRaw||crypto.getRandomValues(new Uint8Array(32));
  const rows=[];
  for(const memberId of memberIds){
   const wrapKey=await deriveDMKey(memberId),iv=crypto.getRandomValues(new Uint8Array(12));
@@ -2007,6 +2007,34 @@ async function createGroupKeyEnvelopes(groupId,memberIds){
  if(error)throw error;
  localStorage.setItem('sft-group-key-'+S.currentUserId+'-'+groupId+'-'+epoch,e2eeBase64Url(raw));
  return epoch;
+}
+async function removeGroupMemberAndRotate(groupId,memberId){
+ if(!groupId||!memberId||memberId===S.currentUserId)throw new Error('Choose another member to remove.');
+ const client=getSupabase();
+ const {data:group,error:groupError}=await client.from('group_chats').select('key_epoch,key_rotation_pending').eq('id',groupId).single();
+ if(groupError)throw groupError;
+ const nextEpoch=Number(group.key_epoch||1)+1;
+ const {error:lockError}=await client.from('group_chats').update({key_rotation_pending:true}).eq('id',groupId);
+ if(lockError)throw lockError;
+ try{
+  const {error:memberError}=await client.from('group_chat_members').delete().eq('group_id',groupId).eq('user_id',memberId);
+  if(memberError)throw memberError;
+  const {error:oldKeyError}=await client.from('group_chat_key_envelopes').delete().eq('group_id',groupId).eq('user_id',memberId);
+  if(oldKeyError)throw oldKeyError;
+  const {error:staleEpochError}=await client.from('group_chat_key_envelopes').delete().eq('group_id',groupId).eq('key_epoch',nextEpoch);
+  if(staleEpochError)throw staleEpochError;
+  const {data:members,error:membersError}=await client.from('group_chat_members').select('user_id').eq('group_id',groupId);
+  if(membersError)throw membersError;
+  const memberIds=(members||[]).map(m=>m.user_id);
+  if(!memberIds.includes(S.currentUserId))throw new Error('You are no longer a group member; key rotation cannot continue.');
+  await createGroupKeyEnvelopes(groupId,memberIds,nextEpoch);
+  const {error:activateError}=await client.from('group_chats').update({key_epoch:nextEpoch,key_rotation_pending:false}).eq('id',groupId);
+  if(activateError)throw activateError;
+  toast('Member removed and group encryption key rotated.','success');
+ }catch(e){
+  toast('Group key rotation is incomplete. Sending is paused for safety; an admin must retry the rotation. '+e.message,'error');
+  throw e;
+ }
 }
 async function getGroupKey(groupId,epoch){
  let resolvedEpoch=epoch||null;
