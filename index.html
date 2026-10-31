@@ -284,6 +284,7 @@ tailwind.config = {
           <i class="fa-solid fa-comment-dots w-5 text-center"></i><span>Chats</span>
           <span id="sb-chat-badge" class="ml-auto bg-brand-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full"></span>
         </button>
+        <button onclick="go('feed')" data-nav="feed" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition"><i class="fa-solid fa-newspaper w-5 text-center text-fuchsia-500"></i><span>Social Feed</span></button>
         <button onclick="go('people')" data-nav="people" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition"><i class="fa-solid fa-user-group w-5 text-center text-sky-500"></i><span>People</span><span id="people-request-badge" class="ml-auto hidden bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full"></span></button>
         <button onclick="go('status')" data-nav="status" class="ni w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
           <i class="fa-solid fa-circle-notch w-5 text-center text-emerald-500"></i><span>Status</span>
@@ -358,6 +359,17 @@ tailwind.config = {
         </div>
         <div class="relative"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i><input id="people-search" oninput="renderPeople()" type="search" placeholder="Search registered people by name or username" class="w-full pl-9 pr-3 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"></div>
         <div id="people-list" class="space-y-2"><div class="p-6 text-center text-xs text-gray-500">Loading people…</div></div>
+      </section>
+
+      <!-- ═══ SOCIAL FEED ═══ -->
+      <section id="v-feed" class="view hidden max-w-2xl mx-auto p-3 space-y-4">
+        <div class="flex items-center justify-between"><div><h1 class="text-xl font-black">Social Feed</h1><p class="text-xs text-gray-500 mt-1">Share moments with your connections</p></div><button onclick="loadSocialFeed()" class="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800"><i class="fa-solid fa-rotate"></i></button></div>
+        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 space-y-3">
+          <div class="flex gap-2 items-start"><img id="feed-me-avatar" class="w-10 h-10 rounded-full object-cover" src=""><textarea id="feed-post-body" rows="2" maxlength="5000" placeholder="What's happening?" class="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-3 text-sm resize-none outline-none"></textarea></div>
+          <div id="feed-media-preview" class="hidden text-xs text-gray-500"></div>
+          <div class="flex items-center justify-between gap-2"><label class="text-xs font-bold text-gray-500 flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-paperclip text-brand-500"></i> Photo, video or document<input id="feed-media-file" type="file" accept="image/*,video/mp4,video/webm,.pdf,.doc,.docx,.txt" class="hidden" onchange="previewFeedMedia(this)"></label><button onclick="publishFeedPost()" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold">Post</button></div>
+        </div>
+        <div id="feed-posts" class="space-y-3"><p class="text-center text-xs text-gray-400 p-8">Loading your feed…</p></div>
       </section>
 
       <!-- ═══ STATUS ═══ -->
@@ -1416,6 +1428,7 @@ function go(view) {
   $('sb-overlay').classList.add('hidden');
   document.querySelector('main').scrollTop = 0;
   if (view === 'chats') renderChats();
+  if (view === 'feed') loadSocialFeed();
   if (view === 'people') { loadPeople().catch(error=>toast('Could not load people: '+authErrorMessage(error),'error')); }
   if (view === 'status') renderStatusList();
   if (view === 'calls') renderCalls();
@@ -1545,6 +1558,7 @@ function initUI() {
   loadLiveChats().then(()=>{sftLiveChatsReady=true;if(pendingSFTNativeAction)processSFTNativeAction();if(pendingSFTFcmToken)registerNativePushToken()}).catch(error=>{console.warn('Could not load live chats:',error.message);toast('Could not load your conversations. Please refresh.','error');});
   subscribePeopleRealtime();
   loadPeople().catch(error=>console.warn('People load:',error.message));
+  loadSocialFeed().catch(error=>console.warn('Feed load:',error.message));
   go('chats');
 }
 
@@ -2150,6 +2164,86 @@ function newCallPicker() {
   </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
   setTimeout(() => { $('call-pick').classList.remove('hidden'); $('call-pick').classList.add('flex'); }, 10);
+}
+
+
+/* ══════════ SOCIAL FEED ══════════ */
+let feedMediaFile = null;
+function previewFeedMedia(input) {
+  feedMediaFile = input.files?.[0] || null;
+  const preview = $('feed-media-preview');
+  if (!feedMediaFile) { preview.classList.add('hidden'); preview.textContent=''; return; }
+  const max = feedMediaFile.type.startsWith('video/') ? 50 : 25;
+  if (feedMediaFile.size > max * 1024 * 1024) { input.value=''; feedMediaFile=null; return toast('Choose a file smaller than '+max+' MB.','error'); }
+  preview.textContent = 'Selected: ' + feedMediaFile.name;
+  preview.classList.remove('hidden');
+}
+async function uploadSocialMedia(file, folder) {
+  if (!file) return null;
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100);
+  const path = S.currentUserId+'/'+folder+'/'+Date.now()+'-'+safeName;
+  const {error} = await getSupabase().storage.from('social-media').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+  if (error) throw error;
+  return getSupabase().storage.from('social-media').getPublicUrl(path).data.publicUrl;
+}
+async function loadSocialFeed() {
+  if (!S.currentUserId) return;
+  $('feed-me-avatar').src = me()?.avatar || '';
+  const {data,error} = await getSupabase().from('feed_posts')
+    .select('id,user_id,body,media_url,media_type,created_at,profiles:user_id(display_name,username,avatar_url),feed_comments(id,user_id,body,created_at,profiles:user_id(display_name,username)),feed_reactions(id,user_id,reaction)')
+    .order('created_at',{ascending:false}).limit(60);
+  if (error) { console.warn('Feed load:',error.message); $('feed-posts').innerHTML='<p class="text-center text-xs text-red-400 p-6">Could not load feed. Please refresh.</p>'; return; }
+  renderSocialFeed(data||[]);
+}
+function renderSocialFeed(posts) {
+  const el=$('feed-posts');
+  if (!posts.length) { el.innerHTML='<div class="p-8 text-center text-sm text-gray-400 bg-white dark:bg-gray-900 rounded-2xl">No posts yet. Share the first update with your connections.</div>'; return; }
+  el.innerHTML=posts.map(post=>{
+    const p=post.profiles||{}, name=p.display_name||p.username||'SocialfreeText user', avatar=p.avatar_url||IMG_POOL[0];
+    const comments=post.feed_comments||[], reactions=post.feed_reactions||[];
+    const reacted=reactions.some(r=>r.user_id===S.currentUserId);
+    let media='';
+    if(post.media_url&&post.media_type==='image') media='<img src="'+esc(post.media_url)+'" class="w-full max-h-[420px] object-cover rounded-xl mt-3" loading="lazy">';
+    else if(post.media_url&&post.media_type==='video') media='<video src="'+esc(post.media_url)+'" controls playsinline class="w-full max-h-[420px] rounded-xl mt-3"></video>';
+    else if(post.media_url) media='<a href="'+esc(post.media_url)+'" target="_blank" rel="noopener" class="mt-3 flex items-center gap-2 p-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm"><i class="fa-solid fa-file-pdf text-red-500"></i> Open shared document</a>';
+    const commentHtml=comments.slice(-3).map(c=>'<div class="text-xs py-1"><b>'+esc(c.profiles?.display_name||c.profiles?.username||'Member')+'</b> '+esc(c.body)+'</div>').join('');
+    return '<article class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-3" data-post="'+post.id+'"><div class="flex items-center gap-2"><img src="'+esc(avatar)+'" class="w-10 h-10 rounded-full object-cover"><div class="flex-1 min-w-0"><p class="font-bold text-sm truncate">'+esc(name)+'</p><p class="text-[10px] text-gray-400">'+fTime(new Date(post.created_at).getTime())+'</p></div>'+(post.user_id===S.currentUserId?'<button onclick="deleteFeedPost(\''+post.id+'\')" class="text-gray-400 p-2" title="Delete post"><i class="fa-solid fa-trash"></i></button>':'')+'</div>'+(post.body?'<p class="text-sm whitespace-pre-wrap break-words mt-3">'+esc(post.body)+'</p>':'')+media+'<div class="flex items-center gap-4 border-t border-gray-100 dark:border-gray-800 mt-3 pt-2"><button onclick="toggleFeedReaction(\''+post.id+'\')" class="text-xs font-bold '+(reacted?'text-rose-500':'text-gray-500')+'"><i class="fa-solid fa-heart mr-1"></i>'+(reactions.length||'Like')+'</button><button onclick="addFeedComment(\''+post.id+'\')" class="text-xs font-bold text-gray-500"><i class="fa-regular fa-comment mr-1"></i>'+comments.length+' Comments</button></div>'+(commentHtml?'<div class="mt-2 border-t border-gray-100 dark:border-gray-800 pt-2">'+commentHtml+'</div>':'')+'</article>';
+  }).join('');
+}
+async function publishFeedPost() {
+  const body=$('feed-post-body').value.trim(), file=feedMediaFile;
+  if (!body&&!file) return toast('Write something or attach media first.','error');
+  const button=document.querySelector('#v-feed button[onclick="publishFeedPost()"]');
+  if(button){button.disabled=true;button.textContent='Posting…';}
+  try {
+    let media_url=null, media_type=null;
+    if(file){media_url=await uploadSocialMedia(file,'feed');media_type=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':'document';}
+    const {error}=await getSupabase().from('feed_posts').insert({user_id:S.currentUserId,body,media_url,media_type});
+    if(error)throw error;
+    $('feed-post-body').value='';$('feed-media-file').value='';$('feed-media-preview').classList.add('hidden');feedMediaFile=null;
+    await loadSocialFeed();toast('Post shared.','success');
+  } catch(e){toast('Could not publish post: '+e.message,'error');}
+  finally{if(button){button.disabled=false;button.textContent='Post';}}
+}
+async function toggleFeedReaction(postId) {
+  try {
+    const client=getSupabase();
+    const {data,error}=await client.from('feed_reactions').select('id').eq('post_id',postId).eq('user_id',S.currentUserId).maybeSingle();
+    if(error)throw error;
+    const result=data?await client.from('feed_reactions').delete().eq('id',data.id):await client.from('feed_reactions').insert({post_id:postId,user_id:S.currentUserId,reaction:'❤️'});
+    if(result.error)throw result.error;
+    await loadSocialFeed();
+  } catch(e){toast('Reaction failed: '+e.message,'error');}
+}
+async function addFeedComment(postId) {
+  const body=prompt('Write a comment:');if(!body?.trim())return;
+  try{const {error}=await getSupabase().from('feed_comments').insert({post_id:postId,user_id:S.currentUserId,body:body.trim().slice(0,2000)});if(error)throw error;await loadSocialFeed();}
+  catch(e){toast('Comment failed: '+e.message,'error');}
+}
+async function deleteFeedPost(postId) {
+  if(!confirm('Delete this post?'))return;
+  try{const {error}=await getSupabase().from('feed_posts').delete().eq('id',postId).eq('user_id',S.currentUserId);if(error)throw error;await loadSocialFeed();}
+  catch(e){toast('Could not delete post: '+e.message,'error');}
 }
 
 /* ══════════ STATUS ══════════ */
