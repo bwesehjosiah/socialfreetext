@@ -1788,12 +1788,6 @@ function renderMsgs() {
     </div>`;
   }).join('');
   box.scrollTop = box.scrollHeight;
-  if (c && c.type === 'dm') {
-    setTimeout(() => {
-      (S.messages[activeChat]||[]).forEach(m => { if (m.from !== S.currentUserId) m.read = true; });
-      saveState();
-    }, 800);
-  }
 }
 
 let livePresenceChannel=null, liveMessageChannel=null, liveCallChannel=null, livePeer=null, liveLocalStream=null, liveCallPeerId=null, liveCallKind='audio', liveIncoming=false, liveOnlineIds=new Set(), liveSeenIds=new Set(), pendingLiveIce=[];
