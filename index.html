@@ -1430,7 +1430,7 @@ function go(view) {
   if (view === 'chats') renderChats();
   if (view === 'feed') loadSocialFeed();
   if (view === 'people') { loadPeople().catch(error=>toast('Could not load people: '+authErrorMessage(error),'error')); }
-  if (view === 'status') renderStatusList();
+  if (view === 'status') loadSharedStatuses();
   if (view === 'calls') renderCalls();
   if (view === 'groups') renderGroups();
   if (view === 'communities') renderCommunities();
@@ -2249,7 +2249,18 @@ async function deleteFeedPost(postId) {
 /* ══════════ STATUS ══════════ */
 let statusType = 'text';
 let statusBg = 'bg-gradient-to-br from-indigo-500 to-purple-600';
-function renderStatusList() {
+async function loadSharedStatuses() {
+  if (!S.currentUserId) return;
+  const {data,error}=await getSupabase().from('statuses')
+    .select('id,user_id,content,media_url,created_at,expires_at,status_type,background,caption,music,profiles(id,username,display_name,avatar_url)')
+    .gt('expires_at',new Date().toISOString()).order('created_at',{ascending:true}).limit(300);
+  if(error){console.warn('Statuses load:',error.message);toast('Could not load shared statuses: '+error.message,'error');return;}
+  const profileUsers=(data||[]).map(r=>r.profiles).filter(Boolean);
+  for(const p of profileUsers){if(!userById(p.id))S.users.push({id:p.id,name:p.display_name||p.username||'Member',username:p.username||'',avatar:p.avatar_url||IMG_POOL[0],bio:'',role:'User',status:'active'});}
+  S.statuses=(data||[]).map(r=>({id:r.id,userId:r.user_id,type:r.status_type|| (r.media_url?'photo':'text'),at:new Date(r.created_at).getTime(),expiresAt:r.expires_at,text:r.content,media:r.media_url,bg:r.background,caption:r.caption||'',music:r.music||'',viewers:[],reactions:{}}));
+  renderStatusList();
+}
+async function renderStatusList() {
   $('st-me-av').src = me().avatar;
   const mine = S.statuses.filter(s => s.userId === S.currentUserId);
   $('my-status-hint').textContent = mine.length ? `${mine.length} update${mine.length>1?'s':''}` : 'Tap to add status update';
@@ -2279,6 +2290,7 @@ function openStatusCreator() {
         <div class="flex gap-2">
           <button onclick="stType('text')" data-stype="text" class="stype px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold">📝 Text</button>
           <button onclick="stType('photo')" data-stype="photo" class="stype px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs font-bold">📷 Photo</button>
+          <button onclick="stType('video')" data-stype="video" class="stype px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs font-bold">🎬 Video</button>
         </div>
         <div id="st-text-sec">
           <textarea id="st-text" rows="3" placeholder="Type your status…" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500"></textarea>
@@ -2287,8 +2299,7 @@ function openStatusCreator() {
           </div>
         </div>
         <div id="st-media-sec" class="hidden">
-          <input id="st-media" type="url" placeholder="Paste image URL" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500">
-          <button onclick="$('st-media').value=STOCK_MEDIA[Math.floor(Math.random()*STOCK_MEDIA.length)]" class="mt-2 text-[11px] font-bold text-emerald-500">🎲 Random image</button>
+          <label class="block text-xs font-bold text-gray-500">Choose photo or video<input id="st-media-file" type="file" accept="image/*,video/mp4,video/webm" class="block w-full mt-2 text-xs"></label>
         </div>
         <input id="st-cap" type="text" placeholder="Caption (optional)" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500">
         <input id="st-music" type="text" placeholder="🎵 Music (optional)" class="w-full px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500">
@@ -2306,27 +2317,26 @@ function stType(t) {
     b.className = `stype px-4 py-2 rounded-xl text-xs font-bold ${on?'bg-brand-600 text-white':'bg-gray-100 dark:bg-gray-800 text-gray-500'}`;
   });
   $('st-text-sec').classList.toggle('hidden', t !== 'text');
-  $('st-media-sec').classList.toggle('hidden', t !== 'photo');
+  $('st-media-sec').classList.toggle('hidden', t === 'text');
 }
-function publishStatus() {
-  const type = statusType;
-  const cap = $('st-cap').value.trim();
-  const music = $('st-music').value.trim();
-  const s = { id:'s'+uid(), userId:S.currentUserId, type, at:now(), viewers:[], reactions:{}, caption:cap, music };
-  if (type === 'text') {
-    const t = $('st-text').value.trim();
-    if (!t) return toast('Write something', 'error');
-    s.text = t; s.bg = statusBg;
-  } else {
-    const m = $('st-media').value.trim();
-    if (!m) return toast('Add media URL', 'error');
-    s.media = m;
-  }
-  S.statuses.unshift(s);
-  saveState();
-  $('sc-sheet').remove();
-  renderStatusList();
-  toast('Status published ⏳', 'success');
+async function publishStatus() {
+  const type=statusType, cap=$('st-cap').value.trim(), music=$('st-music').value.trim();
+  const text=$('st-text').value.trim(), file=$('st-media-file')?.files?.[0]||null;
+  if(type==='text'&&!text)return toast('Write something','error');
+  if(type!=='text'&&!file)return toast('Choose a photo or video first','error');
+  try {
+    let media_url=null;
+    if(file)media_url=await uploadSocialMedia(file,'stories');
+    const content=type==='text'?text:(cap||'Shared a '+type);
+    const {error}=await getSupabase().from('statuses').insert({
+      user_id:S.currentUserId,content,media_url,
+      expires_at:new Date(Date.now()+24*60*60*1000).toISOString(),
+      status_type:type==='text'?'text':(file?.type.startsWith('video/')?'video':'photo'),
+      background:type==='text'?statusBg:null,caption:cap,music
+    });
+    if(error)throw error;
+    $('sc-sheet').remove();await loadSharedStatuses();toast('Status shared for 24 hours.','success');
+  } catch(e){toast('Could not publish status: '+e.message,'error');}
 }
 let storyUser = null, storyIdx = 0, storyTimer = null;
 function openStoryFor(userId) {
@@ -2349,7 +2359,7 @@ function showStory() {
   if (s.type === 'text') {
     content.innerHTML = `<div class="${s.bg||'bg-brand-600'} w-[300px] h-[400px] max-w-[80vw] max-h-[70vh] flex items-center justify-center p-6 text-center text-white text-2xl font-bold rounded-2xl">${esc(s.text)}</div>`;
   } else {
-    content.innerHTML = `<img src="${esc(s.media)}" class="max-w-[80vw] max-h-[70vh] object-contain rounded-2xl">`;
+    content.innerHTML = s.type==='video' ? `<video src="${esc(s.media)}" controls autoplay playsinline class="max-w-[80vw] max-h-[70vh] rounded-2xl"></video>` : `<img src="${esc(s.media)}" class="max-w-[80vw] max-h-[70vh] object-contain rounded-2xl">`;
   }
   const musicEl = s.music ? `<div class="absolute top-4 left-4 bg-black/60 backdrop-blur text-white text-[11px] px-3 py-1.5 rounded-full"><i class="fa-solid fa-music mr-1"></i>${esc(s.music)}</div>` : '';
   const capEl = s.caption ? `<div class="absolute bottom-20 left-0 right-0 text-center text-white text-sm px-6 drop-shadow-lg">${esc(s.caption)}</div>` : '';
