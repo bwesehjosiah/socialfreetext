@@ -2190,7 +2190,7 @@ async function loadSocialFeed() {
   if (!S.currentUserId) return;
   $('feed-me-avatar').src = me()?.avatar || '';
   const {data,error} = await getSupabase().from('feed_posts')
-    .select('id,user_id,body,media_url,media_type,created_at,profiles:user_id(display_name,username,avatar_url),feed_comments(id,user_id,body,created_at,profiles:user_id(display_name,username)),feed_reactions(id,user_id,reaction)')
+    .select('id,user_id,body,media_url,media_type,created_at,profiles(display_name,username,avatar_url),feed_comments(id,user_id,body,created_at,profiles(display_name,username)),feed_reactions(id,user_id,reaction)')
     .order('created_at',{ascending:false}).limit(60);
   if (error) { console.warn('Feed load:',error.message); $('feed-posts').innerHTML='<p class="text-center text-xs text-red-400 p-6">Could not load feed. Please refresh.</p>'; return; }
   renderSocialFeed(data||[]);
