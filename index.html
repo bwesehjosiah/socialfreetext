@@ -1710,6 +1710,7 @@ function renderMsgs() {
     if (m.type === 'text') content = `<p class="whitespace-pre-wrap break-words">${esc(m.text)}</p>`;
     else if (m.type === 'image') content = `<img src="${esc(m.text)}" class="rounded-xl max-w-full max-h-64 object-cover cursor-pointer" onclick="viewImage('${esc(m.text)}')">`;
     else if (m.type === 'file') content = `<a href="${esc(m.text)}" target="_blank" class="flex items-center gap-2 underline"><i class="fa-solid fa-file"></i> ${esc(m.name||'file')}</a>`;
+    else if (m.type === 'video') content = `<video src="${esc(m.text)}" controls playsinline class="rounded-xl max-w-full max-h-64"></video>`;
     else if (m.type === 'voice') {
       const bars = Array.from({length:24}).map((_,i)=>`<div class="wave-bar" style="height:${6+Math.abs(Math.sin(i*0.7))*14}px"></div>`).join('');
       content = `<button onclick="playEncryptedVoice('${esc(m.text)}','${m.from}','${m.id}')" class="flex items-center gap-2"><i class="fa-solid fa-play text-xs"></i><div class="flex items-center gap-0.5 h-6">${bars}</div><span class="text-[10px] font-mono">${m.dur||'0:03'}</span></button>`;
@@ -1991,11 +1992,11 @@ function beep() {
 function attachMenu() {
   const html = `<div class="fixed inset-0 z-[180] bg-black/50 hidden items-end justify-center" id="attach-sheet" onclick="if(event.target===this)this.remove()">
     <div class="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl p-4 grid grid-cols-3 gap-3 slide-up">
-      <button onclick="this.closest('#attach-sheet').remove();attachURL('image')" class="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800">
+      <button onclick="this.closest('#attach-sheet').remove();attachGroupMedia('image')" class="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800">
         <span class="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-lg"><i class="fa-solid fa-image"></i></span>
         <span class="text-xs font-bold">Photo</span>
       </button>
-      <button onclick="this.closest('#attach-sheet').remove();attachURL('file')" class="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800">
+      <button onclick="this.closest('#attach-sheet').remove();attachGroupMedia('document')" class="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800">
         <span class="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-lg"><i class="fa-solid fa-file"></i></span>
         <span class="text-xs font-bold">File</span>
       </button>
@@ -2011,6 +2012,22 @@ function attachMenu() {
   </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
   setTimeout(() => { $('attach-sheet').classList.remove('hidden'); $('attach-sheet').classList.add('flex'); }, 10);
+}
+async function attachGroupMedia(kind){
+ const chat=chatById(activeChat);
+ if(!chat||chat.type!=='group')return attachURL(kind==='document'?'file':'image');
+ const picker=document.createElement('input');picker.type='file';picker.accept=kind==='image'?'image/*':kind==='video'?'video/mp4,video/webm':'.pdf,.doc,.docx,.txt';
+ picker.onchange=async()=>{
+  const file=picker.files?.[0];if(!file)return;
+  if(file.size>50*1024*1024)return toast('Files must be 50 MB or smaller.','error');
+  try{
+   const url=await uploadSocialMedia(file,'groups/'+chat.id);
+   const media_type=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':'document';
+   const {error}=await getSupabase().from('group_chat_messages').insert({group_id:chat.id,sender_id:S.currentUserId,body:'',media_url:url,media_type});
+   if(error)throw error;await loadGroupMessages(chat.id);toast('File shared.','success');
+  }catch(e){toast('Could not share file: '+e.message,'error');}
+ };
+ picker.click();
 }
 function attachURL(kind) {
   const url = prompt(kind === 'file' ? 'Paste file URL:' : 'Paste image URL:');
