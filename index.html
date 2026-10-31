@@ -2516,7 +2516,7 @@ async function renderGroups() {
   const groups=data||[];
   S.chats=S.chats.filter(c=>c.type!=='group').concat(groups.map(g=>({id:g.id,type:'group',name:g.name,desc:g.description,avatar:g.avatar_url||IMG_POOL[3],memberIds:(g.group_chat_members||[]).map(m=>m.user_id),admins:(g.group_chat_members||[]).filter(m=>m.role==='admin').map(m=>m.user_id),createdBy:g.created_by,lastMsg:'Group conversation',lastTime:new Date(g.created_at).getTime(),unread:0})));
   if(!groups.length){el.innerHTML='<p class="text-center text-xs text-gray-400 py-8">No groups yet. Create one to start chatting.</p>';return;}
-  el.innerHTML=groups.map(g=>'<button onclick="openConv(\\''+g.id+'\\')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-left"><img src="'+esc(g.avatar_url||IMG_POOL[3])+'" class="w-12 h-12 rounded-full object-cover"><div class="flex-1 min-w-0"><p class="font-bold text-sm truncate">'+esc(g.name)+'</p><p class="text-[11px] text-gray-500">'+(g.group_chat_members||[]).length+' members</p></div></button>').join('');
+  el.innerHTML=groups.map(g=>'<button onclick="openConv(\''+g.id+'\')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-left"><img src="'+esc(g.avatar_url||IMG_POOL[3])+'" class="w-12 h-12 rounded-full object-cover"><div class="flex-1 min-w-0"><p class="font-bold text-sm truncate">'+esc(g.name)+'</p><p class="text-[11px] text-gray-500">'+(g.group_chat_members||[]).length+' members</p></div></button>').join('');
 }
 async function loadGroupMessages(groupId){
  const {data,error}=await getSupabase().from('group_chat_messages').select('id,group_id,sender_id,body,media_url,media_type,created_at').eq('group_id',groupId).order('created_at',{ascending:true}).limit(300);
@@ -2529,16 +2529,6 @@ async function loadGroupMessages(groupId){
 function subscribeGroupMessages(groupId){
  if(window.sftGroupChannel){try{getSupabase().removeChannel(window.sftGroupChannel)}catch{}}
  window.sftGroupChannel=getSupabase().channel('group-'+groupId).on('postgres_changes',{event:'*',schema:'public',table:'group_chat_messages',filter:'group_id=eq.'+groupId},()=>loadGroupMessages(groupId).catch(console.warn)).subscribe();
-}
-  const el = $('groups-list');
-  if (!groups.length) return el.innerHTML = '<p class="text-center text-xs text-gray-400 py-8">No groups yet</p>';
-  el.innerHTML = groups.map(g => `<button onclick="openConv('${g.id}')" class="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-left">
-    <img src="${esc(g.avatar||IMG_POOL[3])}" class="w-12 h-12 rounded-full object-cover">
-    <div class="flex-1 min-w-0">
-      <p class="font-bold text-sm truncate">${esc(g.name)}</p>
-      <p class="text-[11px] text-gray-500">${(g.memberIds?.length||0)} members · ${esc(g.lastMsg||'')}</p>
-    </div>
-  </button>`).join('');
 }
 function openGroupCreator() {
   const members = S.users.filter(u => u.id !== S.currentUserId);
